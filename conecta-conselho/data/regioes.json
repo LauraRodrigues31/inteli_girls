@@ -1,0 +1,503 @@
+{
+  "metadados": {
+    "versao": "1.0.0",
+    "status": "SIMULADO",
+    "aviso": "Todos os dados contidos neste arquivo são FICTÍCIOS e SIMULADOS. Não representam indicadores reais de nenhum município, estado ou região do Brasil. Criados exclusivamente para fins de desenvolvimento e teste do sistema Conecta Conselho.",
+    "data_criacao": "2024-01-01",
+    "sistema": "Conecta Conselho - MVP",
+    "descricao": "Base de dados simulada para apoio a decisões de expansão de conectividade em regiões brasileiras fictícias.",
+    "formulas_e_premissas": {
+      "receita_mensal": "clientes_potenciais * (taxa_adesao_esperada / 100) * ticket_medio_mensal",
+      "payback_meses": "capex / (receita_mensal - opex_mensal), apenas quando receita_mensal > opex_mensal",
+      "domicilios_sem_internet": "domicilios_total * (1 - percentual_conectados / 100), arredondado",
+      "clientes_potenciais": "domicilios_total * (1 - percentual_conectados / 100), arredondado",
+      "pessoas_beneficiadas": "domicilios_sem_internet * media_moradores_por_domicilio (premissa: 3.2 moradores/domicilio)",
+      "populacao_minima": "domicilios_total * 3 (regra de consistência)",
+      "unidades_monetarias": "Reais (BRL), valores inteiros ou com até 2 casas decimais",
+      "percentuais": "Escala 0 a 100 (nunca 0 a 1)",
+      "booleanos": "true/false",
+      "indices": "Escala 0 a 100 (maior = melhor ou pior conforme contexto documentado)"
+    },
+    "convencoes": {
+      "indice_viabilidade_tecnica": "0=inviável, 100=totalmente viável",
+      "indice_vulnerabilidade_social": "0=sem vulnerabilidade, 100=máxima vulnerabilidade",
+      "maturidade_parcerias": "baixa | média | alta",
+      "tecnologias_viaveis": "lista de strings descritivas",
+      "dificuldades_tecnicas": "lista de strings descritivas"
+    }
+  },
+  "regioes": [
+    {
+      "id": "aurora",
+      "nome": "Região Aurora",
+      "descricao_perfil": "Alto potencial econômico e boa infraestrutura existente. Melhor candidata sob perspectiva de mercado e engenharia.",
+      "mercado": {
+        "populacao_estimada": 185000,
+        "domicilios_total": 58000,
+        "renda_media_mensal_reais": 4200,
+        "taxa_crescimento_populacional_pct": 2.1,
+        "percentual_domicilios_conectados": 62,
+        "clientes_potenciais": 6902,
+        "ticket_medio_mensal_reais": 89,
+        "numero_concorrentes": 3
+      },
+      "social": {
+        "percentual_domicilios_sem_internet": 38,
+        "quantidade_escolas": 42,
+        "escolas_sem_conectividade_adequada": 14,
+        "unidades_saude": 18,
+        "unidades_saude_conectividade_inadequada": 5,
+        "percentual_populacao_baixa_renda": 28,
+        "indice_vulnerabilidade_social": 32,
+        "pessoas_potencialmente_beneficiadas": 70528
+      },
+      "engenharia": {
+        "tipo_infraestrutura_disponivel": "Fibra óptica parcial com pontos de presença estabelecidos e rede de cabos coaxiais legada",
+        "distancia_backbone_km": 18,
+        "percentual_cobertura_fibra": 45,
+        "capacidade_infraestrutura_existente": "Média-alta: backbone com capacidade ociosa estimada de 40%",
+        "dificuldades_tecnicas": [
+          "Expansão para bairros periféricos com topografia irregular",
+          "Atualização de equipamentos legados de cabos coaxiais"
+        ],
+        "prazo_implantacao_meses": 8,
+        "tecnologias_viaveis": [
+          "Fibra óptica FTTH",
+          "Expansão de GPON existente",
+          "Fixed Wireless Access (FWA) para áreas de difícil acesso"
+        ],
+        "indice_viabilidade_tecnica": 78
+      },
+      "financeiro": {
+        "capex_reais": 3200000,
+        "opex_mensal_reais": 185000,
+        "orcamento_disponivel_reais": 4000000,
+        "taxa_adesao_esperada_pct": 45,
+        "receita_mensal_reais": 276425.1,
+        "payback_meses": 35,
+        "restricoes_orcamentarias": "Orçamento disponível cobre CAPEX com margem de segurança de 20%",
+        "riscos_financeiros": [
+          "Alta concorrência pode reduzir taxa de adesão",
+          "Custo de atualização de rede legada não previsto inicialmente",
+          "Pressão de preço de concorrentes estabelecidos"
+        ]
+      },
+      "parcerias": {
+        "quantidade_instituicoes_ancora": 6,
+        "parceiros_publicos_possiveis": [
+          "Prefeitura Municipal (potencial para conectar escolas públicas)",
+          "Secretaria Estadual de Saúde (conectividade em UBS)",
+          "SEBRAE Regional (apoio a microempresas)"
+        ],
+        "parceiros_privados_possiveis": [
+          "Operadora de cabo local (compartilhamento de infraestrutura passiva)",
+          "Condomínios residenciais de médio e alto padrão",
+          "Associação Comercial da região"
+        ],
+        "infraestrutura_compartilhavel": true,
+        "oportunidades_reducao_custos": [
+          "Compartilhamento de dutos e postes com operadora de cabo existente",
+          "Acordo com prefeitura para uso de postes do sistema de iluminação pública",
+          "Programa de subsídio estadual para conectividade em escolas"
+        ],
+        "percentual_economia_potencial_pct": 22,
+        "maturidade_parcerias": "alta"
+      }
+    },
+    {
+      "id": "horizonte",
+      "nome": "Região Horizonte",
+      "descricao_perfil": "Grande impacto social potencial, mas renda mais baixa e menor capacidade de pagamento. Melhor candidata sob perspectiva social.",
+      "mercado": {
+        "populacao_estimada": 142000,
+        "domicilios_total": 44000,
+        "renda_media_mensal_reais": 1800,
+        "taxa_crescimento_populacional_pct": 1.4,
+        "percentual_domicilios_conectados": 28,
+        "clientes_potenciais": 10365,
+        "ticket_medio_mensal_reais": 55,
+        "numero_concorrentes": 1
+      },
+      "social": {
+        "percentual_domicilios_sem_internet": 72,
+        "quantidade_escolas": 61,
+        "escolas_sem_conectividade_adequada": 48,
+        "unidades_saude": 27,
+        "unidades_saude_conectividade_inadequada": 20,
+        "percentual_populacao_baixa_renda": 64,
+        "indice_vulnerabilidade_social": 74,
+        "pessoas_potencialmente_beneficiadas": 101376
+      },
+      "engenharia": {
+        "tipo_infraestrutura_disponivel": "Rede de cobre (ADSL) com qualidade degradada e cobertura de fibra incipiente",
+        "distancia_backbone_km": 35,
+        "percentual_cobertura_fibra": 12,
+        "capacidade_infraestrutura_existente": "Baixa: infraestrutura de cobre no limite operacional",
+        "dificuldades_tecnicas": [
+          "Infraestrutura de cobre degradada exige substituição antes da expansão",
+          "Distância elevada do backbone aumenta custo de backhaul",
+          "Alta densidade de ocupação irregular dificulta passagem de cabos"
+        ],
+        "prazo_implantacao_meses": 14,
+        "tecnologias_viaveis": [
+          "Fibra óptica FTTH em fases",
+          "Fixed Wireless Access (FWA) como solução de curto prazo",
+          "Conexão via satélite LEO para localidades mais remotas"
+        ],
+        "indice_viabilidade_tecnica": 51
+      },
+      "financeiro": {
+        "capex_reais": 5100000,
+        "opex_mensal_reais": 210000,
+        "orcamento_disponivel_reais": 4500000,
+        "taxa_adesao_esperada_pct": 52,
+        "receita_mensal_reais": 296439.0,
+        "payback_meses": 59,
+        "restricoes_orcamentarias": "CAPEX supera orçamento disponível em R$ 600.000, exigindo captação complementar ou parceria",
+        "riscos_financeiros": [
+          "Baixa renda média pode resultar em inadimplência elevada",
+          "Orçamento insuficiente para cobrir CAPEX sem parcerias",
+          "Prazo longo de payback aumenta exposição a riscos macroeconômicos",
+          "Dependência de subsídios governamentais para viabilidade"
+        ]
+      },
+      "parcerias": {
+        "quantidade_instituicoes_ancora": 9,
+        "parceiros_publicos_possiveis": [
+          "Ministério das Comunicações (programas de inclusão digital)",
+          "Prefeitura Municipal (Programa de Educação Digital)",
+          "Governo Estadual (Fundo de Universalização de Serviços de Telecomunicações - FUST)",
+          "Secretaria Municipal de Assistência Social"
+        ],
+        "parceiros_privados_possiveis": [
+          "ONG de inclusão digital com atuação local",
+          "Banco comunitário regional (microcrédito para assinatura)"
+        ],
+        "infraestrutura_compartilhavel": false,
+        "oportunidades_reducao_custos": [
+          "Acesso a recursos do FUST para expansão em áreas de baixa renda",
+          "Parceria com programa federal de conectividade em escolas",
+          "Modelo de plano social subsidiado com faixa de preço reduzida"
+        ],
+        "percentual_economia_potencial_pct": 31,
+        "maturidade_parcerias": "média"
+      }
+    },
+    {
+      "id": "esperanca",
+      "nome": "Região Esperança",
+      "descricao_perfil": "Alta demanda reprimida e custos de implantação elevados devido à topografia desafiadora. Tensão entre potencial e viabilidade.",
+      "mercado": {
+        "populacao_estimada": 98000,
+        "domicilios_total": 30000,
+        "renda_media_mensal_reais": 2900,
+        "taxa_crescimento_populacional_pct": 3.2,
+        "percentual_domicilios_conectados": 35,
+        "clientes_potenciais": 8891,
+        "ticket_medio_mensal_reais": 72,
+        "numero_concorrentes": 1
+      },
+      "social": {
+        "percentual_domicilios_sem_internet": 65,
+        "quantidade_escolas": 29,
+        "escolas_sem_conectividade_adequada": 22,
+        "unidades_saude": 14,
+        "unidades_saude_conectividade_inadequada": 11,
+        "percentual_populacao_baixa_renda": 48,
+        "indice_vulnerabilidade_social": 61,
+        "pessoas_potencialmente_beneficiadas": 62400
+      },
+      "engenharia": {
+        "tipo_infraestrutura_disponivel": "Cobertura 4G com saturação e pontos isolados de fibra em área central",
+        "distancia_backbone_km": 62,
+        "percentual_cobertura_fibra": 8,
+        "capacidade_infraestrutura_existente": "Baixa: saturação de rede móvel, fibra restrita ao centro urbano",
+        "dificuldades_tecnicas": [
+          "Topografia montanhosa com encostas de difícil acesso",
+          "Grande distância do backbone exige investimento em backhaul dedicado",
+          "Ausência de infraestrutura passiva (dutos, postes adequados) nas áreas periféricas",
+          "Risco de deslizamentos em períodos chuvosos afetando cabos"
+        ],
+        "prazo_implantacao_meses": 20,
+        "tecnologias_viaveis": [
+          "Fibra óptica FTTH para área central",
+          "Fixed Wireless Access (FWA) para encostas e áreas de difícil acesso",
+          "Conexão via satélite LEO para comunidades isoladas"
+        ],
+        "indice_viabilidade_tecnica": 38
+      },
+      "financeiro": {
+        "capex_reais": 8700000,
+        "opex_mensal_reais": 290000,
+        "orcamento_disponivel_reais": 5000000,
+        "taxa_adesao_esperada_pct": 58,
+        "receita_mensal_reais": 371288.16,
+        "payback_meses": 107,
+        "restricoes_orcamentarias": "CAPEX muito acima do orçamento disponível (déficit de R$ 3.700.000), inviável sem financiamento externo",
+        "riscos_financeiros": [
+          "CAPEX muito elevado torna o projeto dependente de financiamento externo",
+          "Payback longo (acima de 9 anos) com alto risco de obsolescência tecnológica",
+          "Custos de manutenção aumentados pela topografia adversa",
+          "Alta taxa de crescimento populacional pode superar capacidade implantada rapidamente"
+        ]
+      },
+      "parcerias": {
+        "quantidade_instituicoes_ancora": 4,
+        "parceiros_publicos_possiveis": [
+          "BNDES (financiamento para infraestrutura em regiões de difícil acesso)",
+          "Prefeitura Municipal (cessão de áreas para instalação de infraestrutura)"
+        ],
+        "parceiros_privados_possiveis": [
+          "Operadora de telecomunicações regional (backhaul compartilhado)",
+          "Empresa de energia elétrica (compartilhamento de postes e infraestrutura)"
+        ],
+        "infraestrutura_compartilhavel": true,
+        "oportunidades_reducao_custos": [
+          "Compartilhamento de infraestrutura de postes com distribuidora de energia",
+          "Financiamento via BNDES com condições especiais para regiões de difícil acesso",
+          "Uso de FWA para reduzir custo de passagem de cabos em encostas"
+        ],
+        "percentual_economia_potencial_pct": 28,
+        "maturidade_parcerias": "baixa"
+      }
+    },
+    {
+      "id": "central",
+      "nome": "Região Central",
+      "descricao_perfil": "Infraestrutura existente sólida e menor custo de expansão. Candidata mais equilibrada entre custo, retorno e viabilidade técnica.",
+      "mercado": {
+        "populacao_estimada": 220000,
+        "domicilios_total": 70000,
+        "renda_media_mensal_reais": 3500,
+        "taxa_crescimento_populacional_pct": 1.2,
+        "percentual_domicilios_conectados": 71,
+        "clientes_potenciais": 5692,
+        "ticket_medio_mensal_reais": 95,
+        "numero_concorrentes": 4
+      },
+      "social": {
+        "percentual_domicilios_sem_internet": 29,
+        "quantidade_escolas": 78,
+        "escolas_sem_conectividade_adequada": 18,
+        "unidades_saude": 32,
+        "unidades_saude_conectividade_inadequada": 7,
+        "percentual_populacao_baixa_renda": 22,
+        "indice_vulnerabilidade_social": 24,
+        "pessoas_potencialmente_beneficiadas": 65152
+      },
+      "engenharia": {
+        "tipo_infraestrutura_disponivel": "Fibra óptica bem distribuída com infraestrutura de backhaul própria e rede metropolitana estabelecida",
+        "distancia_backbone_km": 8,
+        "percentual_cobertura_fibra": 68,
+        "capacidade_infraestrutura_existente": "Alta: backbone com capacidade ociosa estimada de 55%, rede metroethernet estabelecida",
+        "dificuldades_tecnicas": [
+          "Concorrência consolidada dificulta adesão de novos clientes",
+          "Saturação em alguns nós centrais pode exigir upgrade de equipamentos"
+        ],
+        "prazo_implantacao_meses": 6,
+        "tecnologias_viaveis": [
+          "Expansão GPON existente",
+          "Fibra óptica FTTH para áreas ainda não atendidas",
+          "Upgrade de capacidade em nós existentes"
+        ],
+        "indice_viabilidade_tecnica": 88
+      },
+      "financeiro": {
+        "capex_reais": 1900000,
+        "opex_mensal_reais": 155000,
+        "orcamento_disponivel_reais": 3000000,
+        "taxa_adesao_esperada_pct": 40,
+        "receita_mensal_reais": 216296.0,
+        "payback_meses": 31,
+        "restricoes_orcamentarias": "Orçamento confortavelmente acima do CAPEX, com margem de segurança de 57%",
+        "riscos_financeiros": [
+          "Concorrência intensa pode pressionar margens e reduzir adesão esperada",
+          "Risco de guerra de preços com operadoras estabelecidas",
+          "Mercado mais maduro limita crescimento orgânico"
+        ]
+      },
+      "parcerias": {
+        "quantidade_instituicoes_ancora": 8,
+        "parceiros_publicos_possiveis": [
+          "Prefeitura Municipal (digitalização de serviços públicos)",
+          "Universidade pública regional (campus conectado)",
+          "Secretaria de Educação (rede de escolas estaduais)"
+        ],
+        "parceiros_privados_possiveis": [
+          "Shopping centers e centros comerciais (hotspot e conectividade)",
+          "Redes hoteleiras (conectividade para hóspedes)",
+          "Condomínios empresariais (conectividade corporativa)",
+          "Operadora de TV a cabo (acordo de não-concorrência e IRU)"
+        ],
+        "infraestrutura_compartilhavel": true,
+        "oportunidades_reducao_custos": [
+          "IRU (Indefeasible Right of Use) com operadora de fibra existente para expansão rápida",
+          "Acordo de compartilhamento de postes com concessionária de energia",
+          "Parceria com universidade pública para uso de infraestrutura de fibra do campus"
+        ],
+        "percentual_economia_potencial_pct": 18,
+        "maturidade_parcerias": "alta"
+      }
+    },
+    {
+      "id": "vale_verde",
+      "nome": "Região Vale Verde",
+      "descricao_perfil": "Oportunidades importantes de parcerias estratégicas com agentes públicos e privados. Melhor candidata sob perspectiva de parcerias.",
+      "mercado": {
+        "populacao_estimada": 76000,
+        "domicilios_total": 24000,
+        "renda_media_mensal_reais": 2400,
+        "taxa_crescimento_populacional_pct": 2.8,
+        "percentual_domicilios_conectados": 42,
+        "clientes_potenciais": 4634,
+        "ticket_medio_mensal_reais": 78,
+        "numero_concorrentes": 1
+      },
+      "social": {
+        "percentual_domicilios_sem_internet": 58,
+        "quantidade_escolas": 22,
+        "escolas_sem_conectividade_adequada": 17,
+        "unidades_saude": 11,
+        "unidades_saude_conectividade_inadequada": 8,
+        "percentual_populacao_baixa_renda": 43,
+        "indice_vulnerabilidade_social": 55,
+        "pessoas_potencialmente_beneficiadas": 44544
+      },
+      "engenharia": {
+        "tipo_infraestrutura_disponivel": "Rede mista com fibra em eixo principal e cobertura 4G nas áreas rurais adjacentes",
+        "distancia_backbone_km": 28,
+        "percentual_cobertura_fibra": 22,
+        "capacidade_infraestrutura_existente": "Média: eixo principal com capacidade razoável, áreas rurais dependentes de wireless",
+        "dificuldades_tecnicas": [
+          "Área rural extensa com baixa densidade domiciliar aumenta custo por ponto",
+          "Clima úmido e vegetação densa degradam equipamentos de wireless"
+        ],
+        "prazo_implantacao_meses": 12,
+        "tecnologias_viaveis": [
+          "Fibra óptica FTTH para núcleo urbano",
+          "Fixed Wireless Access (FWA) para áreas rurais",
+          "Parceria com operadora rural para backhaul compartilhado"
+        ],
+        "indice_viabilidade_tecnica": 62
+      },
+      "financeiro": {
+        "capex_reais": 2800000,
+        "opex_mensal_reais": 165000,
+        "orcamento_disponivel_reais": 2500000,
+        "taxa_adesao_esperada_pct": 60,
+        "receita_mensal_reais": 216871.2,
+        "payback_meses": 54,
+        "restricoes_orcamentarias": "CAPEX levemente acima do orçamento (déficit de R$ 300.000), viável com pequena captação complementar",
+        "riscos_financeiros": [
+          "Baixa densidade rural aumenta custo de manutenção por cliente",
+          "Taxa de crescimento elevada pode exigir expansão de capacidade prematura",
+          "Risco de churn elevado em área com alternativas de conexão móvel"
+        ]
+      },
+      "parcerias": {
+        "quantidade_instituicoes_ancora": 11,
+        "parceiros_publicos_possiveis": [
+          "Cooperativa de eletrificação rural (infraestrutura e acesso a comunidades)",
+          "Prefeitura Municipal (programa de digitalização rural)",
+          "EMBRAPA Regional (conectividade para pesquisa agropecuária)",
+          "Secretaria Estadual de Agricultura (programa de agro digital)",
+          "Banco do Brasil (programa de crédito rural digital)"
+        ],
+        "parceiros_privados_possiveis": [
+          "Cooperativas agrícolas (âncora de demanda garantida)",
+          "Frigoríficos e agroindústrias locais (conectividade industrial)",
+          "Empresa de irrigação inteligente (IoT agropecuário)",
+          "Distribuidora regional de energia (compartilhamento de postes e dutos)",
+          "Operadora de telefonia rural com cobertura 4G existente"
+        ],
+        "infraestrutura_compartilhavel": true,
+        "oportunidades_reducao_custos": [
+          "Compartilhamento extensivo de infraestrutura com cooperativa de eletrificação rural",
+          "Contratos âncora com cooperativas agrícolas garantindo receita mínima",
+          "Programa federal de conectividade rural reduzindo CAPEX",
+          "Compartilhamento de torres de transmissão com operadora 4G existente"
+        ],
+        "percentual_economia_potencial_pct": 38,
+        "maturidade_parcerias": "alta"
+      }
+    },
+    {
+      "id": "nova_uniao",
+      "nome": "Região Nova União",
+      "descricao_perfil": "Baixa viabilidade técnica e financeira. Perfil que concentra os maiores desafios, servindo como contraponto para análise comparativa.",
+      "mercado": {
+        "populacao_estimada": 52000,
+        "domicilios_total": 16000,
+        "renda_media_mensal_reais": 1200,
+        "taxa_crescimento_populacional_pct": 0.6,
+        "percentual_domicilios_conectados": 18,
+        "clientes_potenciais": 10361,
+        "ticket_medio_mensal_reais": 49,
+        "numero_concorrentes": 0
+      },
+      "social": {
+        "percentual_domicilios_sem_internet": 82,
+        "quantidade_escolas": 19,
+        "escolas_sem_conectividade_adequada": 17,
+        "unidades_saude": 8,
+        "unidades_saude_conectividade_inadequada": 7,
+        "percentual_populacao_baixa_renda": 78,
+        "indice_vulnerabilidade_social": 86,
+        "pessoas_potencialmente_beneficiadas": 41984
+      },
+      "engenharia": {
+        "tipo_infraestrutura_disponivel": "Apenas cobertura 2G/3G com qualidade variável, sem fibra óptica disponível na região",
+        "distancia_backbone_km": 98,
+        "percentual_cobertura_fibra": 0,
+        "capacidade_infraestrutura_existente": "Muito baixa: sem infraestrutura fixa, cobertura móvel de qualidade insuficiente",
+        "dificuldades_tecnicas": [
+          "Ausência total de fibra óptica exige implantação do zero",
+          "Distância extremamente alta do backbone (98 km) torna backhaul muito caro",
+          "Terreno com características pantanosas em parte da área dificulta enterramento de cabos",
+          "Ausência de energia elétrica estável em algumas localidades",
+          "Baixa densidade domiciliar aumenta custo médio por cliente"
+        ],
+        "prazo_implantacao_meses": 28,
+        "tecnologias_viaveis": [
+          "Conexão via satélite LEO (única opção de curto prazo)",
+          "Fixed Wireless Access (FWA) com backhaul via satélite",
+          "Fibra óptica FTTH apenas a longo prazo, condicionado a expansão de backbone"
+        ],
+        "indice_viabilidade_tecnica": 18
+      },
+      "financeiro": {
+        "capex_reais": 12500000,
+        "opex_mensal_reais": 380000,
+        "orcamento_disponivel_reais": 3500000,
+        "taxa_adesao_esperada_pct": 65,
+        "receita_mensal_reais": 329997.85,
+        "payback_meses": null,
+        "restricoes_orcamentarias": "CAPEX supera orçamento em R$ 9.000.000. OPEX mensal supera receita mensal, tornando o projeto inviável financeiramente sem subsídio integral",
+        "riscos_financeiros": [
+          "Receita mensal inferior ao OPEX: operação deficitária sem subsídio",
+          "CAPEX muito acima do orçamento disponível, inviável sem financiamento externo massivo",
+          "Baixíssima renda média compromete sustentabilidade do modelo comercial",
+          "Risco alto de inadimplência e churn",
+          "Dependência total de programas governamentais de universalização"
+        ]
+      },
+      "parcerias": {
+        "quantidade_instituicoes_ancora": 3,
+        "parceiros_publicos_possiveis": [
+          "Ministério das Comunicações (programa de universalização em regiões remotas)",
+          "Governo Estadual (fundo especial para regiões de baixo IDH)"
+        ],
+        "parceiros_privados_possiveis": [
+          "Operadora de satélite LEO (única alternativa de curto prazo viável)"
+        ],
+        "infraestrutura_compartilhavel": false,
+        "oportunidades_reducao_custos": [
+          "Uso de satélite LEO elimina necessidade de infraestrutura terrestre de backhaul",
+          "Modelo de concessão pública pode transferir parte do risco ao governo"
+        ],
+        "percentual_economia_potencial_pct": 12,
+        "maturidade_parcerias": "baixa"
+      }
+    }
+  ]
+}
