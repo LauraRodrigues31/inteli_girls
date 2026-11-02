@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "watsonx-orchestrate-adk-docs": {
-      "command": "C:\\Users\\Inteli\\AppData\\Local\\Microsoft\\WinGet\\Links\\uvx.exe",
+      "command": "uvx",
       "args": [
         "mcp-proxy",
         "--transport",
@@ -11,12 +11,12 @@
       "timeout": 120000
     },
     "watsonx-orchestrate-adk": {
-      "command": "C:\\Users\\Inteli\\AppData\\Local\\Microsoft\\WinGet\\Links\\uvx.exe",
+      "command": "uvx",
       "args": [
         "ibm-watsonx-orchestrate-mcp-server"
       ],
       "env": {
-        "WXO_MCP_WORKING_DIRECTORY": "c:\\Users\\Inteli\\Documents\\inteli_girls",
+        "WXO_MCP_WORKING_DIRECTORY": "c:\\Users\\Admin\\Documents\\Inteli\\IA\\inteli_girls",
         "WXO_MCP_DEBUG": ""
       },
       "timeout": 120000
