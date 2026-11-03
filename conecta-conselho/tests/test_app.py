@@ -63,7 +63,9 @@ AGENTES_ESPECIALISTAS = [
     "pontes",
 ]
 
-CAMPOS_PARECER = ["score", "confianca", "justificativa", "riscos", "limitacoes"]
+# O Guardiao real retorna apenas score, confianca, justificativa e erro no resumo de pareceres.
+# riscos e limitacoes sao opcionais (presentes na versao local legada, ausentes no Guardiao real).
+CAMPOS_PARECER = ["score", "confianca", "justificativa"]
 
 
 # ---------------------------------------------------------------------------
@@ -325,3 +327,42 @@ class TestTodasRegioes:
         from tools.consultar_regiao import listar_ids_regioes  # type: ignore[import]
         ids = set(listar_ids_regioes())
         assert ids == set(IDS_VALIDOS)
+
+
+# ---------------------------------------------------------------------------
+# Testes de scores e recomendacoes exatos — fonte unica: Guardiao
+# ---------------------------------------------------------------------------
+
+
+class TestScoresExatos:
+    """
+    Verifica que chamar_guardiao devolve exatamente os mesmos scores e
+    recomendacoes que a tool_guardiao calcula diretamente.
+    Referencia: aurora 62 piloto | horizonte 57 piloto | esperanca 44 aguardar
+                central 60 piloto | vale_verde 60 piloto | nova_uniao 30 escalar
+    """
+
+    @pytest.mark.parametrize("regiao_id,score_esp,rec_esp", [
+        ("aurora",     62, "realizar_piloto"),
+        ("horizonte",  57, "realizar_piloto"),
+        ("esperanca",  44, "aguardar"),
+        ("central",    60, "realizar_piloto"),
+        ("vale_verde", 60, "realizar_piloto"),
+        ("nova_uniao", 30, "escalar"),
+    ])
+    def test_score_e_recomendacao_exatos(self, regiao_id, score_esp, rec_esp):
+        resultado = chamar_guardiao(regiao_id)
+        assert resultado["score_consolidado"] == score_esp, (
+            f"{regiao_id}: score esperado {score_esp}, obtido {resultado['score_consolidado']}"
+        )
+        assert resultado["recomendacao"] == rec_esp, (
+            f"{regiao_id}: recomendacao esperada '{rec_esp}', obtida '{resultado['recomendacao']}'"
+        )
+
+    def test_nova_uniao_escalar(self):
+        """Nova Uniao tem orcamento=0 < 20 -> regra extra do grupo forca 'escalar'."""
+        resultado = chamar_guardiao("nova_uniao")
+        assert resultado["recomendacao"] == "escalar", (
+            f"Nova Uniao deve ser 'escalar', obtido '{resultado['recomendacao']}'"
+        )
+        assert resultado["score_consolidado"] == 30
