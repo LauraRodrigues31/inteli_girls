@@ -501,3 +501,105 @@ def test_robustez_chave_extra_ignorada():
     assert r_sem["recomendacao"] == r_com["recomendacao"], (
         "Chave extra nao deve alterar recomendacao"
     )
+
+
+# ---------------------------------------------------------------------------
+# Testes de robustez — bloco markdown, riscos como objetos, scores nao finitos
+# ---------------------------------------------------------------------------
+
+def _json_aurora_puro() -> str:
+    """Retorna o JSON dos 5 pareceres da aurora (montado pelas tools reais)."""
+    return _montar_pareceres("aurora")
+
+
+def test_markdown_bloco_json_resultado_identico():
+    """JSON embrulhado em ```json ... ``` deve dar score 62 e realizar_piloto."""
+    puro = _json_aurora_puro()
+    embrulhado = f"```json\n{puro}\n```"
+    r_puro = _unwrap(_mod_g.consolidar_pareceres(puro))
+    try:
+        r_emb = _unwrap(_mod_g.consolidar_pareceres(embrulhado))
+    except Exception as exc:
+        pytest.fail(f"Lancou excecao com bloco ```json: {exc}")
+    assert r_emb["score_consolidado"] == 62
+    assert r_emb["recomendacao"] == "realizar_piloto"
+    assert r_emb["erro"] is None
+    assert r_emb["score_consolidado"] == r_puro["score_consolidado"]
+
+
+def test_markdown_bloco_simples_resultado_identico():
+    """JSON embrulhado em ``` ... ``` (sem 'json') deve dar mesmo resultado."""
+    puro = _json_aurora_puro()
+    embrulhado = f"```\n{puro}\n```"
+    try:
+        r = _unwrap(_mod_g.consolidar_pareceres(embrulhado))
+    except Exception as exc:
+        pytest.fail(f"Lancou excecao com bloco ```: {exc}")
+    assert r["score_consolidado"] == 62
+    assert r["recomendacao"] == "realizar_piloto"
+    assert r["erro"] is None
+
+
+def test_markdown_texto_prefixo_resultado_identico():
+    """JSON precedido de texto livre deve dar mesmo resultado."""
+    puro = _json_aurora_puro()
+    com_prefixo = f"Aqui estao os pareceres: {puro}"
+    try:
+        r = _unwrap(_mod_g.consolidar_pareceres(com_prefixo))
+    except Exception as exc:
+        pytest.fail(f"Lancou excecao com texto prefixo: {exc}")
+    assert r["score_consolidado"] == 62
+    assert r["recomendacao"] == "realizar_piloto"
+    assert r["erro"] is None
+
+
+def test_riscos_como_objetos_nao_quebra():
+    """riscos como lista de dicts nao deve lançar excecao e texto deve aparecer."""
+    outros = {
+        agente: _parecer_sintetico(60, agente=agente)
+        for agente in ["impacto_social", "engenharia", "orcamento", "pontes"]
+    }
+    outros["mercado"] = {
+        "score": 60,
+        "confianca": "alta",
+        "justificativa": "Justificativa de teste com riscos como objetos.",
+        "riscos": [{"risco": "custo alto"}, {"risco": "baixa adesao"}],
+        "simulado": True,
+        "erro": None,
+    }
+    j = json.dumps(outros, ensure_ascii=False)
+    try:
+        r = _unwrap(_mod_g.consolidar_pareceres(j))
+    except Exception as exc:
+        pytest.fail(f"Lancou excecao com riscos como objetos: {exc}")
+    # "custo alto" deve aparecer em principais_riscos
+    texto_riscos = " ".join(r.get("principais_riscos", []))
+    assert "custo alto" in texto_riscos, (
+        f"'custo alto' nao encontrado em principais_riscos: {r.get('principais_riscos')}"
+    )
+
+
+def test_score_nan_escalar_com_erro():
+    """Score NaN (aceito pelo json.loads) deve gerar score 0 e erro no parecer."""
+    # json.loads aceita NaN em alguns contextos mas nao e JSON valido estrito;
+    # testamos via float direto no normalizador
+    outros = {
+        agente: _parecer_sintetico(60, agente=agente)
+        for agente in ["impacto_social", "engenharia", "orcamento", "pontes"]
+    }
+    # Simula o que chegaria: um parecer com score float('nan') apos parse
+    # Usamos _normalizar_parecer diretamente pois json.loads rejeita NaN literal
+    p_nan = {"score": float("nan"), "confianca": "alta", "riscos": [], "erro": None}
+    p_norm = _mod_g._normalizar_parecer("mercado", p_nan)
+    assert p_norm["score"] == 0
+    assert p_norm["erro"] is not None
+    assert "finito" in p_norm["erro"].lower()
+
+
+def test_score_infinity_escalar_com_erro():
+    """Score Infinity deve gerar score 0 e erro no parecer."""
+    p_inf = {"score": float("inf"), "confianca": "alta", "riscos": [], "erro": None}
+    p_norm = _mod_g._normalizar_parecer("mercado", p_inf)
+    assert p_norm["score"] == 0
+    assert p_norm["erro"] is not None
+    assert "finito" in p_norm["erro"].lower()
