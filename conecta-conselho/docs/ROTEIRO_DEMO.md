@@ -121,7 +121,7 @@ Três regiões foram escolhidas para contar histórias contrastantes com os núm
 > O score é calculado por funções Python determinísticas com fórmulas documentadas. Se o LLM calculasse, os resultados variariam entre execuções, não seriam auditáveis e poderiam contradizer os dados. O LLM só escreve a justificativa em português — o número vem do código.
 
 **P: Como é calculada a confiança?**
-> A confiança não é subjetiva: é determinada pela completude dos dados. Todos os campos obrigatórios presentes → `alta`. Menos de 6 campos ou campo crítico ausente → `baixa`. A regra está documentada na Seção 3.3 do PADRÃO e é a mesma para todos os agentes.
+> A confiança não é opinião do LLM: cada agente a calcula por regra no código. Na maioria dos agentes ela depende da completude dos dados — campos faltando reduzem a confiança. O Agente de Orçamento também reduz a confiança para `baixa` quando a operação é financeiramente inviável (receita menor que o custo operacional), como na Nova União. Não é uma probabilidade estatística. Confiança baixa em qualquer agente leva o Guardião a escalar para um humano.
 
 **P: Os dados são reais?**
 > Não. Todos os dados são 100 % simulados e fictícios, criados exclusivamente para fins de demonstração. O aviso aparece em todas as telas do Streamlit e no topo de cada relatório JSON. Não há nenhum dado real de municípios brasileiros.

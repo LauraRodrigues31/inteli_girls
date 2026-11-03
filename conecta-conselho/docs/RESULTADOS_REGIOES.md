@@ -41,10 +41,10 @@ Nova União: `analisar_orcamento` retorna `confiança = baixa` pois a margem men
 Fórmula do consolidado: `round(0.20·mercado + 0.20·social + 0.25·engenharia + 0.25·orçamento + 0.10·pontes)`
 
 Critérios de recomendação (Seção 11, PADRÃO):
+- `escalar`: consolidado < 30 *OU* engenharia < 20 *OU* orçamento < 20 *OU* algum parecer com erro ou confiança baixa (regra adotada pelo grupo — ver Nota 1) — **avaliada antes das demais**
 - `investir_agora`: consolidado ≥ 70 **E** orçamento ≥ 60 **E** engenharia ≥ 60
 - `realizar_piloto`: consolidado ≥ 50 e não atende `investir_agora`
 - `aguardar`: 30 ≤ consolidado < 50
-- `escalar`: consolidado < 30
 
 Regras de divergência identificadas pelo Guardião (`_identificar_divergencias` em `tools/tool_guardiao.py`):
 1. **D1** — `|social − orçamento| > 30`: divergência nos **dois sentidos** — tanto orçamento alto com social baixo quanto social alto com orçamento baixo
