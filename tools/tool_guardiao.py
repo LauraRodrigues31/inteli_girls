@@ -8,9 +8,8 @@ Agente: Agente Guardiao (cc_guardiao)
 
 AVISO: Todos os dados retornados sao SIMULADOS e ficticios.
 
-Portabilidade do decorador @tool:
-  O import do ADK usa try/except com fallback transparente (identidade).
-  Isso permite importar e testar este modulo sem o venv do ADK ativo.
+Requer o ADK instalado (ver requirements.txt). Import direto do @tool:
+o runtime da nuvem nao aceita try/except em volta dele.
 
 IMPORTANTE: Este arquivo e autocontido. Nao importa consultar_regiao nem
 outras tools. O runtime da nuvem nao acessa outros arquivos do repositorio.
@@ -19,22 +18,17 @@ outras tools. O runtime da nuvem nao acessa outros arquivos do repositorio.
 from __future__ import annotations
 
 import json
+import math
 
-try:
-    from ibm_watsonx_orchestrate.agent_builder.tools import tool as tool  # noqa: PLC0414
-    _ADK_DISPONIVEL = True
-except ImportError:  # pragma: no cover
-    def tool(func):  # type: ignore[misc]
-        """Fallback: sem ADK disponivel, @tool e uma identidade."""
-        return func
-    _ADK_DISPONIVEL = False
+from ibm_watsonx_orchestrate.agent_builder.tools import tool
 
 
 # ---------------------------------------------------------------------------
 # Constantes
 # ---------------------------------------------------------------------------
 
-_AGENTES_VALIDOS = {"mercado", "impacto_social", "engenharia", "orcamento", "pontes"}
+# Ordem fixa garante soma deterministica (set nao tem ordem garantida)
+_AGENTES_VALIDOS = ("mercado", "impacto_social", "engenharia", "orcamento", "pontes")
 _PESOS = {
     "mercado":        0.20,
     "impacto_social": 0.20,
@@ -48,12 +42,145 @@ _LIMITACAO_OBRIGATORIA = (
 
 
 # ---------------------------------------------------------------------------
+# Normalizacao de pareceres — prova de erro para entradas malformadas
+# ---------------------------------------------------------------------------
+
+
+def _normalizar_parecer(agente: str, p) -> dict:
+    """
+    Normaliza e valida um parecer individual antes de qualquer calculo.
+
+    Garante que a tool nunca lanca excecao por entrada malformada do LLM:
+      - p nao e dict              -> parecer de erro com score 0
+      - score ausente/None/bool   -> score 0, erro explicativo
+      - score texto numerico "72" -> converte para int
+      - score float               -> round para int
+      - score fora de 0-100       -> score 0, erro explicativo
+      - confianca ausente/nao-str -> "nao_avaliada"
+      - riscos nao-lista          -> []
+      - demais campos preservados
+    """
+    # p nao e dict: retorna parecer de erro completo
+    if not isinstance(p, dict):
+        return {
+            "score": 0,
+            "confianca": "nao_avaliada",
+            "justificativa": "",
+            "riscos": [],
+            "erro": f"Parecer do agente '{agente}' em formato invalido.",
+        }
+
+    resultado = dict(p)  # copia rasa para nao mutar o original
+    erro_score: str | None = None
+
+    score_raw = resultado.get("score")
+
+    # bool e subclasse de int em Python — tratar antes de int
+    if isinstance(score_raw, bool):
+        erro_score = f"Score do agente '{agente}' e booleano; esperado inteiro 0-100."
+        score_raw = None
+
+    if score_raw is None:
+        if erro_score is None:
+            erro_score = f"Score do agente '{agente}' ausente ou nulo."
+        resultado["score"] = 0
+        resultado["erro"] = resultado.get("erro") or erro_score
+    elif isinstance(score_raw, float):
+        if not math.isfinite(score_raw):
+            resultado["score"] = 0
+            resultado["erro"] = (
+                resultado.get("erro")
+                or f"Score do agente '{agente}' nao e um numero finito."
+            )
+        else:
+            score_int = round(score_raw)
+            if 0 <= score_int <= 100:
+                resultado["score"] = score_int
+            else:
+                resultado["score"] = 0
+                resultado["erro"] = (
+                    resultado.get("erro")
+                    or f"Score do agente '{agente}' fora do intervalo 0-100: {score_raw}."
+                )
+    elif isinstance(score_raw, int):
+        if 0 <= score_raw <= 100:
+            resultado["score"] = score_raw
+        else:
+            resultado["score"] = 0
+            resultado["erro"] = (
+                resultado.get("erro")
+                or f"Score do agente '{agente}' fora do intervalo 0-100: {score_raw}."
+            )
+    elif isinstance(score_raw, str):
+        try:
+            score_float = float(score_raw)
+            if not math.isfinite(score_float):
+                resultado["score"] = 0
+                resultado["erro"] = (
+                    resultado.get("erro")
+                    or f"Score do agente '{agente}' nao e um numero finito."
+                )
+            else:
+                score_conv = int(score_float)
+                if 0 <= score_conv <= 100:
+                    resultado["score"] = score_conv
+                else:
+                    resultado["score"] = 0
+                    resultado["erro"] = (
+                        resultado.get("erro")
+                        or f"Score do agente '{agente}' fora do intervalo 0-100: {score_raw}."
+                    )
+        except (ValueError, TypeError):
+            resultado["score"] = 0
+            resultado["erro"] = (
+                resultado.get("erro")
+                or f"Score do agente '{agente}' nao e numerico: '{score_raw}'."
+            )
+    else:
+        resultado["score"] = 0
+        resultado["erro"] = (
+            resultado.get("erro")
+            or f"Score do agente '{agente}' em tipo invalido: {type(score_raw).__name__}."
+        )
+
+    # confianca deve ser string
+    confianca = resultado.get("confianca")
+    if not isinstance(confianca, str):
+        resultado["confianca"] = "nao_avaliada"
+
+    # riscos deve ser lista; cada item normalizado para string
+    riscos_raw = resultado.get("riscos")
+    if not isinstance(riscos_raw, list):
+        resultado["riscos"] = []
+    else:
+        riscos_norm: list[str] = []
+        for item in riscos_raw:
+            if item is None:
+                continue
+            if isinstance(item, str):
+                riscos_norm.append(item)
+            elif isinstance(item, dict):
+                # Pega o primeiro valor de texto do dict, ou json.dumps como fallback
+                texto = next(
+                    (str(v) for v in item.values() if v is not None and str(v)),
+                    json.dumps(item, ensure_ascii=False),
+                )
+                riscos_norm.append(texto)
+            else:
+                riscos_norm.append(str(item))
+        resultado["riscos"] = riscos_norm
+
+    return resultado
+
+
+# ---------------------------------------------------------------------------
 # Calculos deterministicos
 # ---------------------------------------------------------------------------
 
 
 def _calcular_score_consolidado(pareceres: dict) -> int:
-    """Média ponderada dos cinco scores. Resultado arredondado para inteiro."""
+    """Média ponderada dos cinco scores. Resultado arredondado para inteiro.
+    Itera na ordem fixa de _AGENTES_VALIDOS para resultado determinístico."""
     total = sum(
         _PESOS[agente] * float(pareceres[agente]["score"])
         for agente in _AGENTES_VALIDOS
@@ -239,6 +366,25 @@ def consolidar_pareceres(pareceres_json: str) -> dict:
         "erro": None,
     }
 
+    # --- Pre-processamento: extrai JSON de blocos markdown ou texto com prefixo ---
+    if isinstance(pareceres_json, str):
+        s = pareceres_json.strip()
+        # Remove bloco de codigo markdown: ```json ... ``` ou ``` ... ```
+        if s.startswith("```"):
+            linhas = s.splitlines()
+            # Remove primeira linha (```json ou ```) e ultima linha (```)
+            linhas = linhas[1:]
+            if linhas and linhas[-1].strip() == "```":
+                linhas = linhas[:-1]
+            s = "\n".join(linhas).strip()
+        # Se ainda nao comecar com "{", tenta encontrar primeiro "{" e ultimo "}"
+        if not s.startswith("{"):
+            inicio = s.find("{")
+            fim = s.rfind("}")
+            if inicio != -1 and fim != -1 and fim > inicio:
+                s = s[inicio:fim + 1]
+        pareceres_json = s
+
     # --- Parse do JSON de entrada ---
     try:
         pareceres_completos: dict = json.loads(pareceres_json)
@@ -256,20 +402,27 @@ def consolidar_pareceres(pareceres_json: str) -> dict:
         )
         return resultado_base
 
-    # --- Garante que todos os 5 agentes estao presentes; preenche ausentes com score 0 ---
+    # --- Filtra apenas as 5 chaves dos agentes; ignora chaves extras (ex: "regiao_id") ---
+    pareceres_agentes: dict = {}
     for agente in _AGENTES_VALIDOS:
-        if agente not in pareceres_completos:
-            pareceres_completos[agente] = {
+        p_raw = pareceres_completos.get(agente)
+        if p_raw is None:
+            # Agente ausente: cria parecer de erro
+            pareceres_agentes[agente] = {
                 "score": 0,
                 "confianca": "nao_avaliada",
                 "justificativa": f"Parecer do agente '{agente}' nao fornecido.",
                 "riscos": [],
                 "erro": f"Parecer ausente para o agente '{agente}'.",
             }
+        else:
+            pareceres_agentes[agente] = _normalizar_parecer(agente, p_raw)
+
+    pareceres_completos = pareceres_agentes
 
     # --- Extrai regiao_id e regiao_nome do primeiro parecer valido ---
     for p in pareceres_completos.values():
-        if p.get("regiao_id"):
+        if isinstance(p, dict) and p.get("regiao_id"):
             resultado_base["regiao_id"]   = p["regiao_id"]
             resultado_base["regiao_nome"] = p.get("regiao_nome", "")
             break
