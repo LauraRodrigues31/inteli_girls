@@ -68,8 +68,18 @@ inteli_girls/
 
 ## Como rodar localmente (Windows / PowerShell)
 
+> **Pré-requisito:** Python 3.12.x — verifique antes de começar:
+> ```powershell
+> python --version   # precisa exibir Python 3.12.x
+> ```
+
+> **PowerShell — política de execução:** em PCs novos ou corporativos, o PowerShell pode bloquear scripts `.ps1`. Se o comando de ativação falhar, rode primeiro:
+> ```powershell
+> Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+> ```
+
 ```powershell
-git clone https://github.com/LauraRodrigues31/inteli_girls.git
+git clone --branch main https://github.com/LauraRodrigues31/inteli_girls.git
 cd inteli_girls
 
 python -m venv .venv
@@ -79,7 +89,7 @@ pip install -r requirements.txt
 python -m pytest -q
 ```
 
-A suíte completa tem **mais de 500 testes** (incluindo os 204 da base de dados) e todos devem passar.
+A suíte completa tem **mais de 750 testes** (incluindo os 204 da base de dados) e todos devem passar.
 
 ### Rodar uma tool isolada
 
