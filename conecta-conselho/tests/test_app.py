@@ -4,12 +4,14 @@ Testes de integração para conecta-conselho/integracao.py.
 Testa:
   - Contrato da saída de chamar_guardiao (campos obrigatórios, tipos, valores válidos)
   - Todas as 6 regiões executam sem exceção
-  - Campos do contrato do Guardião (Seção 11)
-  - Score consolidado entre 0 e 100
-  - Recomendação sempre um dos quatro valores válidos
+  - Campos do contrato do Guardião (novo formato sem "escalar" e sem "principais_oportunidades")
+  - Score consolidado entre 0 e 100 (ou null para analise_incompleta)
+  - Recomendação sempre um dos três valores válidos (investir_agora, realizar_piloto, aguardar)
   - Divergências é lista (pode ser vazia)
-  - Região inexistente retorna erro, não levanta exceção
+  - Região inexistente retorna analise_incompleta, não levanta exceção
   - Score consolidado é calculado com os pesos corretos
+  - Novos campos: status, atencao_prioritaria, pontos_criticos, motivos, caminhos, agentes_com_falha
+  - Scores e recomendações exatos por região
 
 AVISO: Todos os dados são SIMULADOS e fictícios.
 """
@@ -37,22 +39,27 @@ from integracao import chamar_guardiao, _calcular_score_consolidado, _PESOS
 
 IDS_VALIDOS = ["aurora", "horizonte", "esperanca", "central", "vale_verde", "nova_uniao"]
 
-RECOMENDACOES_VALIDAS = {"investir_agora", "realizar_piloto", "aguardar", "escalar"}
+# "escalar" foi removido do Guardião novo
+RECOMENDACOES_VALIDAS = {"investir_agora", "realizar_piloto", "aguardar"}
 
 CAMPOS_OBRIGATORIOS = [
     "agente",
     "regiao_id",
     "regiao_nome",
+    "status",
     "recomendacao",
     "score_consolidado",
     "pareceres",
     "divergencias",
     "justificativa_consolidada",
     "principais_riscos",
-    "principais_oportunidades",
     "limitacoes",
     "simulado",
     "erro",
+    "atencao_prioritaria",
+    "pontos_criticos",
+    "motivos",
+    "caminhos",
 ]
 
 AGENTES_ESPECIALISTAS = [
@@ -63,8 +70,7 @@ AGENTES_ESPECIALISTAS = [
     "pontes",
 ]
 
-# O Guardiao real retorna apenas score, confianca, justificativa e erro no resumo de pareceres.
-# riscos e limitacoes sao opcionais (presentes na versao local legada, ausentes no Guardiao real).
+# O Guardiao retorna apenas score, confianca, justificativa e erro no resumo de pareceres.
 CAMPOS_PARECER = ["score", "confianca", "justificativa"]
 
 
@@ -85,7 +91,7 @@ def resultados_todas_regioes():
 
 
 class TestContratoSaida:
-    """Valida que a saída de chamar_guardiao respeita o contrato da Seção 11."""
+    """Valida que a saída de chamar_guardiao respeita o contrato do Guardião novo."""
 
     @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
     def test_todos_campos_obrigatorios_presentes(self, regiao_id):
@@ -124,6 +130,28 @@ class TestContratoSaida:
             f"Erro inesperado para região válida '{regiao_id}': {resultado['erro']}"
         )
 
+    @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
+    def test_status_concluida_para_regioes_validas(self, regiao_id):
+        resultado = chamar_guardiao(regiao_id)
+        assert resultado["status"] == "concluida", (
+            f"Status esperado 'concluida' para '{regiao_id}', obtido '{resultado['status']}'"
+        )
+
+    @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
+    def test_fonte_local_por_padrao(self, regiao_id):
+        resultado = chamar_guardiao(regiao_id)
+        assert resultado.get("fonte") == "local", (
+            f"Fonte esperada 'local' para '{regiao_id}', obtida '{resultado.get('fonte')}'"
+        )
+
+    @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
+    def test_tempo_analise_presente(self, regiao_id):
+        resultado = chamar_guardiao(regiao_id)
+        assert "tempo_analise_segundos" in resultado, (
+            f"Campo 'tempo_analise_segundos' ausente para '{regiao_id}'"
+        )
+        assert isinstance(resultado["tempo_analise_segundos"], (int, float))
+
 
 # ---------------------------------------------------------------------------
 # Testes de tipos e valores
@@ -150,6 +178,14 @@ class TestTiposValores:
         )
 
     @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
+    def test_recomendacao_nunca_escalar(self, regiao_id):
+        """'escalar' foi removido do Guardião novo."""
+        resultado = chamar_guardiao(regiao_id)
+        assert resultado["recomendacao"] != "escalar", (
+            f"Recomendação 'escalar' não deve existir mais para '{regiao_id}'"
+        )
+
+    @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
     def test_divergencias_e_lista(self, regiao_id):
         resultado = chamar_guardiao(regiao_id)
         assert isinstance(resultado["divergencias"], list)
@@ -160,9 +196,12 @@ class TestTiposValores:
         assert isinstance(resultado["principais_riscos"], list)
 
     @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
-    def test_principais_oportunidades_e_lista(self, regiao_id):
+    def test_sem_campo_principais_oportunidades(self, regiao_id):
+        """principais_oportunidades foi removido do novo formato."""
         resultado = chamar_guardiao(regiao_id)
-        assert isinstance(resultado["principais_oportunidades"], list)
+        assert "principais_oportunidades" not in resultado, (
+            f"Campo 'principais_oportunidades' não deve existir no novo formato para '{regiao_id}'"
+        )
 
     @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
     def test_limitacoes_e_lista_nao_vazia(self, regiao_id):
@@ -186,6 +225,28 @@ class TestTiposValores:
         assert len(just) >= 100, (
             f"Justificativa muito curta ({len(just)} chars) para '{regiao_id}'"
         )
+
+    @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
+    def test_atencao_prioritaria_e_bool(self, regiao_id):
+        resultado = chamar_guardiao(regiao_id)
+        assert isinstance(resultado["atencao_prioritaria"], bool), (
+            f"atencao_prioritaria deve ser bool para '{regiao_id}'"
+        )
+
+    @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
+    def test_pontos_criticos_e_lista(self, regiao_id):
+        resultado = chamar_guardiao(regiao_id)
+        assert isinstance(resultado["pontos_criticos"], list)
+
+    @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
+    def test_motivos_e_lista(self, regiao_id):
+        resultado = chamar_guardiao(regiao_id)
+        assert isinstance(resultado["motivos"], list)
+
+    @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
+    def test_caminhos_e_lista(self, regiao_id):
+        resultado = chamar_guardiao(regiao_id)
+        assert isinstance(resultado["caminhos"], list)
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +307,7 @@ class TestConsistenciaMath:
 
     @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
     def test_recomendacao_e_score_coerentes(self, regiao_id):
-        """Score >= 50 nunca deve resultar em 'aguardar' ou 'escalar'."""
+        """Score >= 50 nunca deve resultar em 'aguardar'."""
         resultado = chamar_guardiao(regiao_id)
         sc = resultado["score_consolidado"]
         rec = resultado["recomendacao"]
@@ -255,9 +316,9 @@ class TestConsistenciaMath:
                 f"Score {sc} deveria gerar investir_agora ou realizar_piloto, "
                 f"mas retornou '{rec}' para '{regiao_id}'"
             )
-        if sc < 30:
-            assert rec == "escalar", (
-                f"Score {sc} deveria gerar 'escalar', "
+        if sc < 50:
+            assert rec == "aguardar", (
+                f"Score {sc} deveria gerar 'aguardar', "
                 f"mas retornou '{rec}' para '{regiao_id}'"
             )
 
@@ -272,18 +333,29 @@ class TestRegioesInexistentes:
         resultado = chamar_guardiao("nao_existe")
         assert isinstance(resultado, dict)
 
-    def test_regiao_inexistente_tem_campo_erro(self):
+    def test_regiao_inexistente_analise_incompleta(self):
+        """Região inexistente: todos os 5 agentes com erro -> analise_incompleta."""
         resultado = chamar_guardiao("nao_existe")
-        assert "erro" in resultado
-        assert resultado["erro"] is not None
+        assert resultado["status"] == "analise_incompleta", (
+            f"Esperado status 'analise_incompleta', obtido '{resultado['status']}'"
+        )
 
-    def test_regiao_inexistente_score_zero(self):
+    def test_regiao_inexistente_recomendacao_null(self):
         resultado = chamar_guardiao("nao_existe")
-        assert resultado["score_consolidado"] == 0
+        assert resultado["recomendacao"] is None, (
+            f"Recomendação deve ser None para região inexistente, obtido '{resultado['recomendacao']}'"
+        )
 
-    def test_regiao_inexistente_recomendacao_escalar(self):
+    def test_regiao_inexistente_score_null(self):
         resultado = chamar_guardiao("nao_existe")
-        assert resultado["recomendacao"] == "escalar"
+        assert resultado["score_consolidado"] is None, (
+            f"Score deve ser None para região inexistente, obtido '{resultado['score_consolidado']}'"
+        )
+
+    def test_regiao_inexistente_tem_agentes_com_falha(self):
+        resultado = chamar_guardiao("nao_existe")
+        assert "agentes_com_falha" in resultado
+        assert len(resultado["agentes_com_falha"]) == 5
 
     def test_regiao_id_vazia_nao_levanta_excecao(self):
         resultado = chamar_guardiao("")
@@ -292,7 +364,7 @@ class TestRegioesInexistentes:
     def test_regiao_id_maiuscula_aceita(self):
         """IDs em maiúscula devem funcionar (normalização de case)."""
         resultado = chamar_guardiao("AURORA")
-        assert resultado.get("erro") is None, (
+        assert resultado.get("status") == "concluida", (
             "Região 'AURORA' em maiúscula deveria ser aceita"
         )
         assert resultado["score_consolidado"] > 0
@@ -314,7 +386,7 @@ class TestTodasRegioes:
         assert isinstance(resultado, dict)
 
     @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
-    def test_regiao_retorna_recomendacao(self, regiao_id):
+    def test_regiao_retorna_recomendacao_valida(self, regiao_id):
         resultado = chamar_guardiao(regiao_id)
         assert resultado.get("recomendacao") in RECOMENDACOES_VALIDAS
 
@@ -330,16 +402,18 @@ class TestTodasRegioes:
 
 
 # ---------------------------------------------------------------------------
-# Testes de scores e recomendacoes exatos — fonte unica: Guardiao
+# Testes de scores, recomendações e atenção prioritária exatos
 # ---------------------------------------------------------------------------
 
 
 class TestScoresExatos:
     """
-    Verifica que chamar_guardiao devolve exatamente os mesmos scores e
-    recomendacoes que a tool_guardiao calcula diretamente.
-    Referencia: aurora 62 piloto | horizonte 57 piloto | esperanca 44 aguardar
-                central 60 piloto | vale_verde 60 piloto | nova_uniao 30 escalar
+    Verifica que chamar_guardiao devolve exatamente os mesmos scores,
+    recomendações e atenção prioritária que a tool_guardiao calcula.
+
+    Referência:
+      aurora 62 piloto · horizonte 57 piloto · esperanca 44 aguardar
+      central 60 piloto · vale_verde 60 piloto · nova_uniao 30 aguardar atencao_prioritaria=True
     """
 
     @pytest.mark.parametrize("regiao_id,score_esp,rec_esp", [
@@ -348,7 +422,7 @@ class TestScoresExatos:
         ("esperanca",  44, "aguardar"),
         ("central",    60, "realizar_piloto"),
         ("vale_verde", 60, "realizar_piloto"),
-        ("nova_uniao", 30, "escalar"),
+        ("nova_uniao", 30, "aguardar"),
     ])
     def test_score_e_recomendacao_exatos(self, regiao_id, score_esp, rec_esp):
         resultado = chamar_guardiao(regiao_id)
@@ -359,10 +433,34 @@ class TestScoresExatos:
             f"{regiao_id}: recomendacao esperada '{rec_esp}', obtida '{resultado['recomendacao']}'"
         )
 
-    def test_nova_uniao_escalar(self):
-        """Nova Uniao tem orcamento=0 < 20 -> regra extra do grupo forca 'escalar'."""
+    def test_nova_uniao_atencao_prioritaria(self):
+        """Nova Uniao tem orcamento=0 < 20 -> atencao_prioritaria=True."""
         resultado = chamar_guardiao("nova_uniao")
-        assert resultado["recomendacao"] == "escalar", (
-            f"Nova Uniao deve ser 'escalar', obtido '{resultado['recomendacao']}'"
+        assert resultado["atencao_prioritaria"] is True, (
+            f"Nova Uniao deve ter atencao_prioritaria=True, obtido '{resultado['atencao_prioritaria']}'"
         )
         assert resultado["score_consolidado"] == 30
+        assert resultado["recomendacao"] == "aguardar"
+
+    def test_nova_uniao_nao_escalar(self):
+        """'escalar' foi removido — Nova Uniao agora é 'aguardar', não 'escalar'."""
+        resultado = chamar_guardiao("nova_uniao")
+        assert resultado["recomendacao"] != "escalar", (
+            "Recomendação 'escalar' não deve existir no Guardião novo"
+        )
+
+    def test_aguardar_tem_motivos(self):
+        """Regiões com 'aguardar' devem ter motivos preenchidos."""
+        for regiao_id in ["esperanca", "nova_uniao"]:
+            resultado = chamar_guardiao(regiao_id)
+            assert resultado["recomendacao"] == "aguardar"
+            assert len(resultado.get("motivos", [])) > 0, (
+                f"'{regiao_id}' com 'aguardar' deve ter motivos preenchidos"
+            )
+
+    def test_piloto_motivos_e_caminhos_vazios(self):
+        """Regiões com 'realizar_piloto' devem ter motivos e caminhos vazios."""
+        resultado = chamar_guardiao("aurora")
+        assert resultado["recomendacao"] == "realizar_piloto"
+        assert resultado.get("motivos") == [], "aurora: motivos devem ser vazios para piloto"
+        assert resultado.get("caminhos") == [], "aurora: caminhos devem ser vazios para piloto"
