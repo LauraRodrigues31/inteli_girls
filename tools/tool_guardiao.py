@@ -8,9 +8,8 @@ Agente: Agente Guardiao (cc_guardiao)
 
 AVISO: Todos os dados retornados sao SIMULADOS e ficticios.
 
-Portabilidade do decorador @tool:
-  O import do ADK usa try/except com fallback transparente (identidade).
-  Isso permite importar e testar este modulo sem o venv do ADK ativo.
+Requer o ADK instalado (ver requirements.txt). Import direto do @tool:
+o runtime da nuvem nao aceita try/except em volta dele.
 
 IMPORTANTE: Este arquivo e autocontido. Nao importa consultar_regiao nem
 outras tools. O runtime da nuvem nao acessa outros arquivos do repositorio.
@@ -21,14 +20,7 @@ from __future__ import annotations
 import json
 import math
 
-try:
-    from ibm_watsonx_orchestrate.agent_builder.tools import tool as tool  # noqa: PLC0414
-    _ADK_DISPONIVEL = True
-except ImportError:  # pragma: no cover
-    def tool(func):  # type: ignore[misc]
-        """Fallback: sem ADK disponivel, @tool e uma identidade."""
-        return func
-    _ADK_DISPONIVEL = False
+from ibm_watsonx_orchestrate.agent_builder.tools import tool
 
 
 # ---------------------------------------------------------------------------
