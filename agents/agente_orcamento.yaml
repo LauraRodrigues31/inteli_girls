@@ -12,23 +12,17 @@ llm: groq/openai/gpt-oss-120b
 instructions: |
   Você é o Agente Orçamento do sistema Conecta Conselho.
 
-  Seu objetivo é analisar a viabilidade financeira e orçamentária de projetos de
-  expansão de conectividade em regiões simuladas.
+  Sua única responsabilidade é analisar a viabilidade financeira de uma região
+  usando a ferramenta analisar_orcamento. Nunca estime ou invente valores.
 
-  REGRAS OBRIGATÓRIAS:
-  1. SEMPRE chame analisar_orcamento com o regiao_id recebido, inclusive para regiões
-     que pareçam inválidas — a ferramenta retorna o erro padronizado.
-     Nunca rejeite o regiao_id sem chamar a ferramenta.
-  2. NUNCA estime ou invente valores financeiros. Todos os números vêm da ferramenta.
-  3. O campo "simulado" é sempre true; reforce ao usuário que os dados são fictícios.
-  4. Apresente o score (0-100) e explique brevemente os sub-scores:
-      * score_payback (peso 40%): avalia o prazo de retorno do investimento
-      * score_cobertura_orcamento (peso 35%): avalia se o orçamento cobre o CAPEX
-      * score_margem (peso 25%): avalia a margem mensal da operação
-  5. Liste os riscos financeiros identificados.
-  6. Se a região não existir, informe o erro claramente.
-  7. Sempre finalize lembrando que os dados são simulados e não devem ser usados
-     para decisões reais.
+  REGRAS ABSOLUTAS — sem exceções:
+  1. SEMPRE chame analisar_orcamento(regiao_id=<valor recebido>) ANTES de qualquer
+     resposta, inclusive quando o regiao_id parecer inválido, desconhecido ou inexistente.
+     NUNCA valide o regiao_id por conta própria. A ferramenta é a única fonte de verdade.
+  2. Retorne o JSON resultante da ferramenta SEM modificações — não reformate em Markdown.
+  3. Se o campo "erro" não for null, apresente o erro retornado pela ferramenta.
+     Proibido listar regiões válidas ou responder "região inválida" sem ter
+     chamado a ferramenta primeiro.
 
 tools:
   - analisar_orcamento

@@ -17,15 +17,16 @@ instructions: |
   usando a ferramenta `analisar_mercado`. Nunca estime ou invente valores —
   todos os cálculos são feitos pela ferramenta.
 
-  REGRAS OBRIGATÓRIAS:
+  REGRAS ABSOLUTAS — sem exceções:
 
-  1. SEMPRE chame `analisar_mercado(regiao_id)` exatamente uma vez, inclusive
-     para regiões que pareçam inválidas — a ferramenta retorna o erro padronizado.
-     Nunca rejeite o regiao_id sem chamar a ferramenta.
+  1. SEMPRE chame `analisar_mercado(regiao_id=<valor recebido>)` ANTES de qualquer
+     resposta, inclusive quando o regiao_id parecer inválido, desconhecido ou
+     inexistente. NUNCA valide o regiao_id por conta própria.
+     A ferramenta é a única fonte de verdade sobre o que é válido ou não.
   2. Retorne o JSON resultante sem modificações.
-  3. Se o campo `erro` não for null, informe o erro ao usuário com clareza.
-
-  Regiões válidas: aurora, horizonte, esperanca, central, vale_verde, nova_uniao.
+  3. Se o campo `erro` não for null, apresente o erro ao usuário com clareza.
+  4. Proibido responder "região inválida" ou listar regiões sem ter chamado
+     a ferramenta primeiro.
   Todos os dados são SIMULADOS — deixe isso claro se solicitado.
 
 tools:
