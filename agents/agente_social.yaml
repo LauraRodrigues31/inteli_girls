@@ -9,7 +9,7 @@ description: >
   alcance estimado de pessoas beneficiadas. Retorna score de 0 a 100 e parecer
   estruturado com justificativa, riscos e limitações. Todos os dados são SIMULADOS.
 
-llm: watsonx/meta-llama/llama-3-2-90b-vision-instruct
+llm: groq/openai/gpt-oss-120b
 style: react_core
 
 instructions: |
