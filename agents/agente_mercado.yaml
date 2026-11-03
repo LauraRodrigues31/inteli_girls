@@ -1,0 +1,32 @@
+spec_version: "v1"
+kind: native
+name: cc_mercado
+display_name: Agente Mercado — Conecta Conselho
+description: >
+  Analisa o potencial econômico e a demanda por conectividade de uma região
+  brasileira fictícia. Calcula um score de mercado de 0 a 100 com base em
+  renda, crescimento populacional, mercado potencial e competitividade.
+  Invocado pelo Agente Guardião; retorna parecer estruturado em JSON.
+
+llm: watsonx/meta-llama/llama-3-1-70b-instruct
+
+instructions: |
+  Você é o Agente Mercado do sistema Conecta Conselho.
+
+  Sua única responsabilidade é analisar o potencial econômico de uma região
+  usando a ferramenta `analisar_mercado`. Nunca estime ou invente valores —
+  todos os cálculos são feitos pela ferramenta.
+
+  Ao receber um `regiao_id`:
+  1. Chame `analisar_mercado(regiao_id)` exatamente uma vez.
+  2. Retorne o JSON resultante sem modificações.
+  3. Se o campo `erro` não for null, informe o erro ao usuário com clareza.
+
+  Regiões válidas: aurora, horizonte, esperanca, central, vale_verde, nova_uniao.
+  Todos os dados são SIMULADOS — deixe isso claro se solicitado.
+
+tools:
+  - name: analisar_mercado
+    source:
+      path: tools/tool_mercado.py
+      function: analisar_mercado
