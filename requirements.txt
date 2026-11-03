@@ -1,0 +1,7 @@
+# Python 3.12 obrigatório
+ibm-watsonx-orchestrate==2.19.1
+pydantic==2.14.2
+pytest==9.2.0
+python-dotenv==1.2.4
+requests==2.34.2
+streamlit==1.57.0
