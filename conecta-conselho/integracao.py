@@ -17,6 +17,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from dotenv import dotenv_values as _dotenv_values
+
 # ---------------------------------------------------------------------------
 # Configuração de paths — garante que tools/ (raiz) e conecta-conselho/ estão
 # acessíveis independente do diretório de execução.
@@ -146,18 +148,40 @@ _AGENTE_ENV = {
     "pontes":         "CC_AGENT_ID_PONTES",
 }
 
+# Caminho do .env na raiz do projecto (mesmo padrão do cliente_nuvem.py)
+_ENV_FILE = _ROOT / ".env"
+
+
+def _ler_ids_agentes() -> dict[str, str]:
+    """
+    Lê os IDs de agente das variáveis CC_AGENT_ID_* com a seguinte prioridade:
+      1. os.environ (variáveis de ambiente do processo — têm precedência)
+      2. .env na raiz do projecto (via dotenv_values — nunca sobrescreve os.environ)
+
+    Retorna um dict {chave_env: valor} com apenas as variáveis encontradas.
+    """
+    env_dot: dict[str, str] = {}
+    if _ENV_FILE.exists():
+        env_dot = {k: v for k, v in _dotenv_values(str(_ENV_FILE)).items() if v}
+
+    resultado: dict[str, str] = {}
+    for chave_env in _AGENTE_ENV.values():
+        # os.environ tem prioridade
+        valor = os.environ.get(chave_env, "").strip()
+        if not valor:
+            valor = env_dot.get(chave_env, "").strip()
+        resultado[chave_env] = valor
+    return resultado
+
 
 def _verificar_credenciais_nuvem() -> tuple[bool, str]:
     """
-    Verifica se todas as credenciais e IDs necessários estão no ambiente.
+    Verifica se todas as credenciais e IDs necessários estão no ambiente ou .env.
     Retorna (ok: bool, mensagem_de_aviso: str).
     Nunca imprime tokens, keys nem IDs.
     """
-    ids_ausentes = [
-        chave_env
-        for chave_env in _AGENTE_ENV.values()
-        if not os.environ.get(chave_env, "").strip()
-    ]
+    ids = _ler_ids_agentes()
+    ids_ausentes = [chave_env for chave_env, valor in ids.items() if not valor]
     if ids_ausentes:
         return False, f"IDs de agente ausentes no .env: {', '.join(ids_ausentes)}"
     return True, ""
@@ -167,18 +191,22 @@ def _consolidar_nuvem(regiao_id: str) -> dict:
     """
     Chama os 5 agentes IBM watsonx Orchestrate em paralelo via ThreadPoolExecutor.
     De cada resposta extrai choices[0].message.content e passa para extrair_json.
-    Se um agente falhar, monta parecer com "erro" preenchido.
-    Consolida com consolidar_pareceres e devolve o mesmo formato do modo local.
+    Se um agente falhar (incluindo {"erro": ...} na resposta), monta parecer com
+    "erro" preenchido. Consolida com consolidar_pareceres e devolve o mesmo
+    formato do modo local.
     """
     import importlib as _imp
     cliente_nuvem = _imp.import_module("cliente_nuvem")
 
     t_inicio = time.monotonic()
 
+    # Lê IDs do .env / os.environ uma única vez (evita re-leitura por thread)
+    ids_agentes = _ler_ids_agentes()
+
     def _chamar_agente(chave: str) -> tuple[str, dict]:
         """Chama um agente na nuvem e retorna (chave, parecer_dict)."""
         env_var = _AGENTE_ENV[chave]
-        agent_id = os.environ.get(env_var, "").strip()
+        agent_id = ids_agentes.get(env_var, "").strip()
         if not agent_id:
             return chave, {
                 "score": 0,
@@ -191,8 +219,28 @@ def _consolidar_nuvem(regiao_id: str) -> dict:
             resposta = cliente_nuvem.chamar_agente(
                 agent_id, f"Analise a região {regiao_id}"
             )
+            # chamar_agente devolve {"erro": ...} em vez de levantar excepção
+            if "erro" in resposta:
+                return chave, {
+                    "score": 0,
+                    "confianca": "nao_avaliada",
+                    "justificativa": "",
+                    "riscos": [],
+                    "erro": resposta["erro"],
+                }
             conteudo = resposta["choices"][0]["message"]["content"]
             parecer = cliente_nuvem.extrair_json(conteudo)
+            # extrair_json devolve {"erro": "..."} quando não consegue parsear.
+            # Verificamos o valor (truthy) para não confundir com {"erro": None}
+            # que é um campo legítimo nos pareceres dos agentes.
+            if parecer.get("erro"):
+                return chave, {
+                    "score": 0,
+                    "confianca": "nao_avaliada",
+                    "justificativa": "",
+                    "riscos": [],
+                    "erro": parecer["erro"],
+                }
             return chave, parecer
         except Exception as exc:  # noqa: BLE001
             return chave, {

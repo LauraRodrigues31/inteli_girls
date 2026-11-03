@@ -9,6 +9,10 @@ Cenários cobertos:
   2. 1 agente com erro HTTP — analise_incompleta
   3. IDs de agente ausentes no .env — analise_incompleta
   4. Resposta em bloco markdown — parseada corretamente
+  5. CC_MODO controla modo padrão
+  6. IDs lidos do .env via dotenv (tmp_path) com os.environ vazio
+  7. Resposta {"erro": ...} de chamar_agente (HTTP 401) — mensagem em agentes_com_falha
+  8. extrair_json retornando {"erro": ...} — mensagem em agentes_com_falha
 
 AVISO: Nenhum teste acessa a internet.
 """
@@ -534,3 +538,303 @@ class TestControleModoPorEnv:
         from integracao import chamar_guardiao
         resultado = chamar_guardiao("aurora", fonte="local")
         assert resultado.get("fonte") == "local"
+
+
+# ---------------------------------------------------------------------------
+# Cenário 6 — IDs lidos do .env via dotenv (tmp_path), os.environ vazio
+# ---------------------------------------------------------------------------
+
+class TestNuvemDotenvArquivo:
+    """
+    Verifica que _ler_ids_agentes e _verificar_credenciais_nuvem leem
+    CC_AGENT_ID_* do arquivo .env da raiz quando os.environ está vazio.
+    Usa monkeypatch para redirecionar _ENV_FILE para um .env temporário.
+    """
+
+    @pytest.fixture
+    def env_dotenv_apenas(self, tmp_path, monkeypatch):
+        """
+        Cria um .env temporário com todos os IDs e garante que as variáveis
+        CC_AGENT_ID_* estão ausentes de os.environ.
+        Redireciona integracao._ENV_FILE para o arquivo temporário.
+        """
+        # Remove as variáveis de os.environ
+        for env_var in _AGENTE_ENV.values():
+            monkeypatch.delenv(env_var, raising=False)
+        monkeypatch.delenv("CC_MODO", raising=False)
+
+        # Cria o .env temporário com os IDs
+        env_file = tmp_path / ".env"
+        linhas = [f"{env_var}=agent-dotenv-{env_var.lower()}" for env_var in _AGENTE_ENV.values()]
+        env_file.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+
+        # Redireciona _ENV_FILE no módulo integracao
+        import integracao
+        monkeypatch.setattr(integracao, "_ENV_FILE", env_file)
+
+        yield env_file
+
+    def test_verificar_credenciais_nuvem_le_dotenv(self, env_dotenv_apenas):
+        """Com os.environ vazio e IDs no .env, credenciais devem ser OK."""
+        from integracao import _verificar_credenciais_nuvem
+        ok, aviso = _verificar_credenciais_nuvem()
+        assert ok is True, f"Credenciais devem ser OK com .env preenchido; aviso: '{aviso}'"
+        assert aviso == ""
+
+    def test_ler_ids_agentes_retorna_valores_do_dotenv(self, env_dotenv_apenas):
+        """_ler_ids_agentes deve retornar os IDs escritos no .env temporário."""
+        from integracao import _ler_ids_agentes
+        ids = _ler_ids_agentes()
+        for env_var in _AGENTE_ENV.values():
+            assert ids.get(env_var), f"ID para '{env_var}' deve estar preenchido via .env"
+
+    def test_chamar_guardiao_nuvem_com_ids_do_dotenv(self, env_dotenv_apenas, monkeypatch):
+        """chamar_guardiao no modo nuvem deve usar os IDs do .env quando os.environ está vazio."""
+        monkeypatch.setenv("CC_MODO", "nuvem")
+
+        # Monta respostas para os IDs escritos no .env temporário
+        ids_dotenv = {
+            env_var: f"agent-dotenv-{env_var.lower()}"
+            for env_var in _AGENTE_ENV.values()
+        }
+        respostas = {
+            ids_dotenv[env]: _fazer_resposta_api(_AURORA_PARECERES[chave])
+            for chave, env in _AGENTE_ENV.items()
+        }
+        mod_mock = _criar_cliente_nuvem_mock(respostas)
+
+        with patch.dict(sys.modules, {"cliente_nuvem": mod_mock}):
+            from integracao import chamar_guardiao
+            resultado = chamar_guardiao("aurora", fonte="nuvem")
+
+        assert resultado["status"] == "concluida", (
+            f"Com IDs no .env deve concluir, obtido status '{resultado['status']}'"
+        )
+
+    def test_os_environ_tem_prioridade_sobre_dotenv(self, tmp_path, monkeypatch):
+        """
+        Se CC_AGENT_ID_MERCADO estiver em os.environ, deve prevalecer sobre o .env.
+        """
+        # .env tem um ID diferente
+        env_file = tmp_path / ".env"
+        env_file.write_text(
+            "CC_AGENT_ID_MERCADO=agent-do-dotenv\n", encoding="utf-8"
+        )
+        import integracao
+        monkeypatch.setattr(integracao, "_ENV_FILE", env_file)
+
+        # os.environ tem outro ID
+        monkeypatch.setenv("CC_AGENT_ID_MERCADO", "agent-do-environ")
+        # Remove os demais para focar só no mercado
+        for env_var in list(_AGENTE_ENV.values())[1:]:
+            monkeypatch.delenv(env_var, raising=False)
+
+        from integracao import _ler_ids_agentes
+        ids = _ler_ids_agentes()
+        assert ids["CC_AGENT_ID_MERCADO"] == "agent-do-environ", (
+            "os.environ deve ter prioridade sobre o .env"
+        )
+
+    def test_sem_dotenv_sem_environ_ids_ausentes(self, tmp_path, monkeypatch):
+        """Sem .env e sem os.environ, _verificar_credenciais_nuvem deve retornar False."""
+        import integracao
+        monkeypatch.setattr(integracao, "_ENV_FILE", tmp_path / "nao_existe.env")
+        for env_var in _AGENTE_ENV.values():
+            monkeypatch.delenv(env_var, raising=False)
+
+        from integracao import _verificar_credenciais_nuvem
+        ok, aviso = _verificar_credenciais_nuvem()
+        assert ok is False
+        assert aviso != ""
+
+
+# ---------------------------------------------------------------------------
+# Cenário 7 — Resposta {"erro": ...} de chamar_agente (HTTP 401)
+# ---------------------------------------------------------------------------
+
+class TestNuvemRespostaErroHTTP:
+    """
+    chamar_agente retorna {"erro": "..."} (ex.: HTTP 401) sem levantar exceção.
+    O integracao.py deve capturar esse erro e propagá-lo para agentes_com_falha.
+    """
+
+    def _resposta_erro_http(self, status: int, agente: str) -> dict:
+        """Monta um dict {"erro": ...} simulando HTTP <status>."""
+        return {
+            "erro": (
+                f"Agente {agente} devolveu HTTP {status}. "
+                f"Detalhe: Unauthorized"
+            )
+        }
+
+    def test_http_401_gera_analise_incompleta(self, env_com_ids):
+        """Resposta HTTP 401 de chamar_agente -> analise_incompleta."""
+        respostas = {}
+        for chave, env in _AGENTE_ENV.items():
+            fake_id = _IDS_FAKE[env]
+            if chave == "mercado":
+                respostas[fake_id] = self._resposta_erro_http(401, fake_id)
+            else:
+                respostas[fake_id] = _fazer_resposta_api(_AURORA_PARECERES[chave])
+
+        mod_mock = _criar_cliente_nuvem_mock(respostas)
+
+        with patch.dict(sys.modules, {"cliente_nuvem": mod_mock}):
+            from integracao import chamar_guardiao
+            resultado = chamar_guardiao("aurora", fonte="nuvem")
+
+        assert resultado["status"] == "analise_incompleta"
+
+    def test_http_401_mensagem_aparece_em_agentes_com_falha(self, env_com_ids):
+        """A mensagem de erro do HTTP 401 deve aparecer em agentes_com_falha."""
+        msg_erro = "Agente fake devolveu HTTP 401. Detalhe: Unauthorized"
+        respostas = {}
+        for chave, env in _AGENTE_ENV.items():
+            fake_id = _IDS_FAKE[env]
+            if chave == "orcamento":
+                respostas[fake_id] = {"erro": msg_erro}
+            else:
+                respostas[fake_id] = _fazer_resposta_api(_AURORA_PARECERES[chave])
+
+        mod_mock = _criar_cliente_nuvem_mock(respostas)
+
+        with patch.dict(sys.modules, {"cliente_nuvem": mod_mock}):
+            from integracao import chamar_guardiao
+            resultado = chamar_guardiao("aurora", fonte="nuvem")
+
+        assert "agentes_com_falha" in resultado
+        nomes_falhos = [af["agente"] for af in resultado["agentes_com_falha"]]
+        assert "orcamento" in nomes_falhos
+
+        motivos = {af["agente"]: af.get("motivo", "") for af in resultado["agentes_com_falha"]}
+        assert msg_erro in motivos.get("orcamento", ""), (
+            f"Mensagem do HTTP 401 deve estar em agentes_com_falha[orcamento].motivo; "
+            f"obtido: '{motivos.get('orcamento')}'"
+        )
+
+    def test_http_401_nao_levanta_excecao(self, env_com_ids):
+        """Resposta de erro não deve levantar exceção — deve retornar dict."""
+        respostas = {
+            _IDS_FAKE[env]: {"erro": f"HTTP 401 — {chave}"}
+            for chave, env in _AGENTE_ENV.items()
+        }
+        mod_mock = _criar_cliente_nuvem_mock(respostas)
+
+        with patch.dict(sys.modules, {"cliente_nuvem": mod_mock}):
+            from integracao import chamar_guardiao
+            try:
+                resultado = chamar_guardiao("aurora", fonte="nuvem")
+            except Exception as exc:
+                pytest.fail(f"Não deveria levantar exceção, mas levantou: {exc}")
+
+        assert isinstance(resultado, dict)
+
+    @pytest.mark.parametrize("codigo_http", [401, 403, 404, 500, 503])
+    def test_varios_codigos_http_geram_analise_incompleta(self, env_com_ids, codigo_http):
+        """Qualquer código HTTP de erro deve gerar analise_incompleta."""
+        respostas = {}
+        for chave, env in _AGENTE_ENV.items():
+            fake_id = _IDS_FAKE[env]
+            if chave == "engenharia":
+                respostas[fake_id] = {
+                    "erro": f"Agente devolveu HTTP {codigo_http}. Detalhe: erro"
+                }
+            else:
+                respostas[fake_id] = _fazer_resposta_api(_AURORA_PARECERES[chave])
+
+        mod_mock = _criar_cliente_nuvem_mock(respostas)
+
+        with patch.dict(sys.modules, {"cliente_nuvem": mod_mock}):
+            from integracao import chamar_guardiao
+            resultado = chamar_guardiao("aurora", fonte="nuvem")
+
+        assert resultado["status"] == "analise_incompleta", (
+            f"HTTP {codigo_http} deve gerar analise_incompleta"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Cenário 8 — extrair_json retornando {"erro": ...}
+# ---------------------------------------------------------------------------
+
+class TestNuvemExtrairJsonErro:
+    """
+    Quando extrair_json não consegue parsear a resposta e devolve {"erro": ...},
+    o agente correspondente deve aparecer em agentes_com_falha.
+    """
+
+    def test_extrair_json_erro_gera_analise_incompleta(self, env_com_ids):
+        """Conteúdo não-JSON faz extrair_json retornar {"erro": ...} -> analise_incompleta."""
+        # Criamos um mock de extrair_json que retorna {"erro": ...} para "pontes"
+        mod_mock = _criar_cliente_nuvem_mock({})  # respostas vazias — sobrescrevemos chamar_agente
+
+        conteudo_invalido = "texto sem json algum"
+        chamadas: dict[str, int] = {}
+
+        def _chamar_agente_custom(agent_id: str, mensagem: str) -> dict:
+            chave = next(
+                (c for c, e in _AGENTE_ENV.items() if _IDS_FAKE[e] == agent_id),
+                None,
+            )
+            chamadas[agent_id] = chamadas.get(agent_id, 0) + 1
+            if chave == "pontes":
+                # Resposta com conteúdo que extrair_json não consegue parsear
+                return {"choices": [{"message": {"content": conteudo_invalido}}]}
+            return _fazer_resposta_api(_AURORA_PARECERES[chave]) if chave else {"erro": "desconhecido"}
+
+        def _extrair_json_custom(texto: str) -> dict:
+            if texto == conteudo_invalido:
+                return {"erro": "Não foi possível extrair JSON da resposta."}
+            import json as _json
+            return _json.loads(texto)
+
+        mod_mock.chamar_agente = _chamar_agente_custom
+        mod_mock.extrair_json = _extrair_json_custom
+
+        with patch.dict(sys.modules, {"cliente_nuvem": mod_mock}):
+            from integracao import chamar_guardiao
+            resultado = chamar_guardiao("aurora", fonte="nuvem")
+
+        assert resultado["status"] == "analise_incompleta", (
+            f"JSON inválido deve gerar analise_incompleta, obtido '{resultado['status']}'"
+        )
+        nomes_falhos = [af["agente"] for af in resultado.get("agentes_com_falha", [])]
+        assert "pontes" in nomes_falhos, (
+            f"'pontes' deve estar em agentes_com_falha: {nomes_falhos}"
+        )
+
+    def test_extrair_json_erro_mensagem_propagada(self, env_com_ids):
+        """A mensagem de erro de extrair_json deve aparecer no motivo do agente falho."""
+        msg_extrair = "Não foi possível extrair JSON da resposta."
+        mod_mock = _criar_cliente_nuvem_mock({})
+
+        def _chamar_agente_custom(agent_id: str, mensagem: str) -> dict:
+            chave = next(
+                (c for c, e in _AGENTE_ENV.items() if _IDS_FAKE[e] == agent_id),
+                None,
+            )
+            if chave == "impacto_social":
+                return {"choices": [{"message": {"content": "texto invalido"}}]}
+            return _fazer_resposta_api(_AURORA_PARECERES[chave]) if chave else {"erro": "desconhecido"}
+
+        def _extrair_json_custom(texto: str) -> dict:
+            if texto == "texto invalido":
+                return {"erro": msg_extrair}
+            import json as _json
+            return _json.loads(texto)
+
+        mod_mock.chamar_agente = _chamar_agente_custom
+        mod_mock.extrair_json = _extrair_json_custom
+
+        with patch.dict(sys.modules, {"cliente_nuvem": mod_mock}):
+            from integracao import chamar_guardiao
+            resultado = chamar_guardiao("aurora", fonte="nuvem")
+
+        motivos = {
+            af["agente"]: af.get("motivo", "")
+            for af in resultado.get("agentes_com_falha", [])
+        }
+        assert msg_extrair in motivos.get("impacto_social", ""), (
+            f"Mensagem de extrair_json deve estar no motivo de 'impacto_social'; "
+            f"obtido: '{motivos.get('impacto_social')}'"
+        )
