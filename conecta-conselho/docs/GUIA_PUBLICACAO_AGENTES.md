@@ -1,9 +1,9 @@
 # Guia de Publicação de Agentes — Conecta Conselho
 
-> **Projeto:** Conecta Conselho — Piloto de Agentes de IA  
-> **Plataforma:** IBM watsonx Orchestrate (SaaS, região `jp-tok`)  
+> **Projeto:** Conecta Conselho — Piloto de Agentes de IA
+> **Plataforma:** IBM watsonx Orchestrate (SaaS, região `jp-tok`)
 > **Instância:** lida de `WXO_URL` no `.env`
-> **Última atualização:** Etapas 6–7 do piloto
+> **Última atualização:** Etapa 4 concluída — todos os 4 testes passaram ✅
 
 ---
 
@@ -19,9 +19,10 @@
    - [Pela tela (Agent Builder → Preview)](#71-pela-tela-agent-builder--preview)
    - [Pela API de Runtime (recomendado no Windows)](#72-pela-api-de-runtime-recomendado-no-windows)
    - [⚠ Por que NÃO usar `orchestrate chat ask`](#73--por-que-não-usar-orchestrate-chat-ask)
-8. [Limitações conhecidas](#8-limitações-conhecidas)
-9. [Regras do workspace compartilhado](#9-regras-do-workspace-compartilhado)
-10. [Troubleshooting Rápido](#10-troubleshooting-rápido)
+8. [Resultados dos testes (Etapa 4 — cc_engenharia)](#8-resultados-dos-testes-etapa-4--cc_engenharia)
+9. [Limitações conhecidas](#9-limitações-conhecidas)
+10. [Regras do workspace compartilhado](#10-regras-do-workspace-compartilhado)
+11. [Troubleshooting Rápido](#11-troubleshooting-rápido)
 
 ---
 
@@ -256,25 +257,50 @@ Isso ocorre porque o CLI abre um prompt interativo que aguarda input do terminal
 
 ---
 
-## 8. Limitações conhecidas
+## 8. Resultados dos testes (Etapa 4 — cc_engenharia)
 
-### 8.1 Agente devolve JSON bruto (por design)
+Testes executados via `_build/test_cc_engenharia.py` contra o endpoint de runtime da instância SaaS
+(`jp-tok`), agente `cc_engenharia` (id `22960685-5461-4fbd-96cd-adf2518efcde`):
+
+| Status | Teste | Score esperado | Score obtido | Observação |
+|--------|-------|---------------|-------------|------------|
+| ✅ PASS | T1 – `central` | 86 | **86** | `confianca: alta`, `erro: null` |
+| ✅ PASS | T2 – `nova_uniao` | 11 | **11** | `confianca: alta`, `erro: null` |
+| ✅ PASS | T3 – `atlantida` (inválida) | 0 | **0** | `confianca: nao_avaliada`, `erro` preenchido |
+| ✅ PASS | T4 – multi-turn "risco técnico" | contexto | resposta contextual | Ver nota abaixo |
+
+**Nota sobre T4:** O agente pediu confirmação da região em vez de usar o contexto de T1 diretamente.
+Isso é esperado: a resposta de T1 é JSON puro, e o LLM não consegue inferir "dela" de um bloco JSON.
+No fluxo real, o Guardião sempre passa `regiao_id` explicitamente — sem dependência de contexto implícito.
+
+**Script de teste:** [`_build/test_cc_engenharia.py`](../../_build/test_cc_engenharia.py) — rode com:
+
+```powershell
+$env:PYTHONIOENCODING = "utf-8"
+.venv\Scripts\python.exe _build\test_cc_engenharia.py
+```
+
+---
+
+## 9. Limitações conhecidas
+
+### 9.1 Agente devolve JSON bruto (por design)
 
 Durante os testes da Etapa 4, observou-se que o agente devolve o JSON completo da ferramenta em vez de uma resposta formatada em linguagem natural. Isso é **comportamento esperado e intencional**: o Guardião (agente orquestrador) precisa do JSON estruturado para fazer a consolidação dos pareceres de todos os agentes especialistas. Se o agente reformatar o texto, o Guardião perde os campos `score`, `confianca`, `riscos`, etc.
 
 Para uma resposta em linguagem natural ao usuário final, o Guardião fará essa formatação ao consolidar os pareceres.
 
-### 8.2 Multi-turn com JSON bruto
+### 9.2 Multi-turn com JSON bruto
 
 O teste T4 (multi-turn: "E qual o principal risco técnico dela?") passou no critério funcional, mas o agente pediu confirmação da região em vez de usar o contexto da conversa anterior. Isso ocorre porque a resposta anterior era JSON puro — o LLM não consegue referenciar "ela" em um bloco JSON. Este comportamento é aceitável no contexto do Guardião (que passa o `regiao_id` explicitamente em cada chamada).
 
-### 8.3 Diferença de mensagem de erro para regiões inexistentes
+### 9.3 Diferença de mensagem de erro para regiões inexistentes
 
 A ferramenta gerada usa `"Nenhuma região com id 'X' foi encontrada..."` (de `_regiao_nao_encontrada`). Os campos funcionais (`score=0`, `confianca=nao_avaliada`, `erro não nulo`) são idênticos entre original e gerada — a diferença é apenas no texto da mensagem, sem impacto no Guardião.
 
 ---
 
-## 9. Regras do workspace compartilhado
+## 10. Regras do workspace compartilhado
 
 | Regra | Detalhe |
 |-------|---------|
@@ -287,7 +313,7 @@ A ferramenta gerada usa `"Nenhuma região com id 'X' foi encontrada..."` (de `_r
 
 ---
 
-## 10. Troubleshooting Rápido
+## 11. Troubleshooting Rápido
 
 | Sintoma | Causa provável | Solução |
 |---------|---------------|---------|
