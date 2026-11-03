@@ -47,12 +47,14 @@ _mod_social     = _importar_tool("tool_social",     "tool_social.py")
 _mod_engenharia = _importar_tool("tool_engenharia", "tool_engenharia.py")
 _mod_orcamento  = _importar_tool("tool_orcamento",  "tool_orcamento.py")
 _mod_pontes     = _importar_tool("tool_pontes",     "tool_pontes.py")
+_mod_guardiao   = _importar_tool("tool_guardiao",   "tool_guardiao.py")
 
-analisar_mercado       = _mod_mercado.analisar_mercado
+analisar_mercado        = _mod_mercado.analisar_mercado
 analisar_impacto_social = _mod_social.analisar_impacto_social
-analisar_engenharia    = _mod_engenharia.analisar_engenharia
-analisar_orcamento     = _mod_orcamento.analisar_orcamento
-analisar_pontes        = _mod_pontes.analisar_pontes
+analisar_engenharia     = _mod_engenharia.analisar_engenharia
+analisar_orcamento      = _mod_orcamento.analisar_orcamento
+analisar_pontes         = _mod_pontes.analisar_pontes
+consolidar_pareceres    = _mod_guardiao.consolidar_pareceres
 
 
 # ---------------------------------------------------------------------------
@@ -67,99 +69,31 @@ def _desempacotar(resultado) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Lógica local do Guardião (sem chamar a instância IBM Cloud)
+# Aliases de compatibilidade — mantidos para testes existentes que importam
+# _calcular_score_consolidado e _PESOS diretamente de integracao.py
 # ---------------------------------------------------------------------------
 
-_PESOS = {
-    "mercado":        0.20,
-    "impacto_social": 0.20,
-    "engenharia":     0.25,
-    "orcamento":      0.25,
-    "pontes":         0.10,
-}
+_PESOS = _mod_guardiao._PESOS
 
 
 def _calcular_score_consolidado(pareceres: dict) -> int:
-    """Média ponderada dos cinco scores conforme Seção 11."""
-    return round(
-        _PESOS["mercado"]        * pareceres["mercado"]["score"] +
-        _PESOS["impacto_social"] * pareceres["impacto_social"]["score"] +
-        _PESOS["engenharia"]     * pareceres["engenharia"]["score"] +
-        _PESOS["orcamento"]      * pareceres["orcamento"]["score"] +
-        _PESOS["pontes"]         * pareceres["pontes"]["score"]
-    )
+    """Delega para a implementação canônica em tool_guardiao."""
+    return _mod_guardiao._calcular_score_consolidado(pareceres)
 
 
-def _determinar_recomendacao(score: int, pareceres: dict) -> str:
-    """Critérios objetivos da Seção 11."""
-    sc_eng = pareceres["engenharia"]["score"]
-    sc_orc = pareceres["orcamento"]["score"]
-    if score >= 70 and sc_orc >= 60 and sc_eng >= 60:
-        return "investir_agora"
-    if score >= 50:
-        return "realizar_piloto"
-    if score >= 30:
-        return "aguardar"
-    return "escalar"
+# ---------------------------------------------------------------------------
+# Consolidação local — fonte única: tool_guardiao.consolidar_pareceres
+# ---------------------------------------------------------------------------
 
-
-def _identificar_divergencias(pareceres: dict) -> list[str]:
-    """Detecta tensões conforme Seção 11."""
-    divergencias = []
-    sc_social = pareceres["impacto_social"]["score"]
-    sc_orc    = pareceres["orcamento"]["score"]
-    sc_eng    = pareceres["engenharia"]["score"]
-    sc_merc   = pareceres["mercado"]["score"]
-    sc_pontes = pareceres["pontes"]["score"]
-
-    if abs(sc_social - sc_orc) > 30:
-        divergencias.append(
-            f"Alto impacto social (score {sc_social}) contrastado com viabilidade "
-            f"financeira {'baixa' if sc_orc < sc_social else 'maior'} (score {sc_orc}). "
-            "Parcerias e subsídios podem ser necessários para viabilização."
-        )
-    if sc_eng < 40 and sc_merc > 60:
-        divergencias.append(
-            f"Boa demanda de mercado (score {sc_merc}) mas viabilidade técnica baixa "
-            f"(score {sc_eng}). Investimento em infraestrutura adicional pode ser necessário."
-        )
-    if sc_pontes > 70 and sc_orc < 40:
-        divergencias.append(
-            f"Parcerias estratégicas promissoras (score {sc_pontes}) podem viabilizar "
-            f"o que o orçamento não suporta sozinho (score {sc_orc})."
-        )
-    return divergencias
+import json as _json
 
 
 def _consolidar_local(regiao_id: str) -> dict:
     """
-    Executa os 5 agentes localmente e monta a saída do Guardião conforme Seção 11.
-    Função provisória enquanto tool_guardiao.py não existir.
+    Executa os 5 agentes localmente e delega toda a lógica de consolidação
+    para consolidar_pareceres (tool_guardiao), que é a fonte única de verdade.
     """
-    from tools.consultar_regiao import consultar_regiao  # type: ignore[import]
-
-    # Verifica se a região existe
-    dados_regiao = consultar_regiao(regiao_id)
-    if "erro" in dados_regiao:
-        return {
-            "agente": "guardiao",
-            "regiao_id": regiao_id,
-            "regiao_nome": None,
-            "recomendacao": "escalar",
-            "score_consolidado": 0,
-            "pareceres": {},
-            "divergencias": [],
-            "justificativa_consolidada": f"Região '{regiao_id}' não encontrada na base de dados.",
-            "principais_riscos": [],
-            "principais_oportunidades": [],
-            "limitacoes": ["Recomendação baseada em dados simulados e pesos hipotéticos definidos para o MVP."],
-            "simulado": True,
-            "erro": dados_regiao["erro"],
-        }
-
-    regiao_nome = dados_regiao.get("nome", regiao_id)
-
-    # Chama os 5 agentes e desempacota ToolResponse se necessário
+    # Monta os 5 pareceres completos (desempacotados)
     pareceres_brutos = {
         "mercado":        _desempacotar(analisar_mercado(regiao_id)),
         "impacto_social": _desempacotar(analisar_impacto_social(regiao_id)),
@@ -168,69 +102,31 @@ def _consolidar_local(regiao_id: str) -> dict:
         "pontes":         _desempacotar(analisar_pontes(regiao_id)),
     }
 
-    # Resumo para o campo pareceres (sem indicadores brutos)
-    pareceres = {
-        nome: {
-            "score":       p.get("score", 0),
-            "confianca":   p.get("confianca", "nao_avaliada"),
-            "justificativa": p.get("justificativa", ""),
-            "riscos":      p.get("riscos", []),
-            "limitacoes":  p.get("limitacoes", []),
-            "erro":        p.get("erro"),
-        }
-        for nome, p in pareceres_brutos.items()
-    }
-
-    score = _calcular_score_consolidado(pareceres)
-    recomendacao = _determinar_recomendacao(score, pareceres)
-    divergencias = _identificar_divergencias(pareceres)
-
-    # Agrega riscos e oportunidades
-    riscos = []
-    for p in pareceres_brutos.values():
-        for r in p.get("riscos", []):
-            if r not in riscos:
-                riscos.append(r)
-
-    # Oportunidades: instituições âncora identificadas por Pontes
-    oportunidades: list[str] = []
-    ind_pontes = pareceres_brutos["pontes"].get("indicadores", {})
-    publicos = ind_pontes.get("parceiros_publicos_possiveis", [])
-    privados = ind_pontes.get("parceiros_privados_possiveis", [])
-    if publicos or privados:
-        oportunidades.append(
-            f"Possíveis parceiros identificados: {', '.join(publicos + privados)}."
-        )
-
-    justificativa = (
-        f"Análise consolidada de {regiao_nome}: "
-        f"Mercado ({pareceres['mercado']['score']}), "
-        f"Social ({pareceres['impacto_social']['score']}), "
-        f"Engenharia ({pareceres['engenharia']['score']}), "
-        f"Orçamento ({pareceres['orcamento']['score']}), "
-        f"Pontes ({pareceres['pontes']['score']}). "
-        f"Score consolidado de {score}/100 leva à recomendação: {recomendacao.replace('_', ' ')}. "
-        f"{'Divergências detectadas entre perspectivas. ' if divergencias else ''}"
-        "Resultado baseado em dados simulados para fins de demonstração do MVP."
+    # Passa para a tool do Guardião como fonte única de verdade
+    resultado = _desempacotar(
+        consolidar_pareceres(_json.dumps(pareceres_brutos, ensure_ascii=False))
     )
 
-    return {
-        "agente": "guardiao",
-        "regiao_id": regiao_id,
-        "regiao_nome": regiao_nome,
-        "recomendacao": recomendacao,
-        "score_consolidado": score,
-        "pareceres": pareceres,
-        "divergencias": divergencias,
-        "justificativa_consolidada": justificativa,
-        "principais_riscos": riscos[:5],
-        "principais_oportunidades": oportunidades,
-        "limitacoes": [
-            "Recomendação baseada em dados simulados e pesos hipotéticos definidos para o MVP."
-        ],
-        "simulado": True,
-        "erro": None,
-    }
+    # Garante regiao_nome preenchido (o Guardião extrai do primeiro parecer válido;
+    # se a região não existe, os pareceres terão regiao_nome vazio)
+    if not resultado.get("regiao_nome"):
+        # Tenta pegar do primeiro parecer que tiver
+        for p in pareceres_brutos.values():
+            if p.get("regiao_nome"):
+                resultado["regiao_nome"] = p["regiao_nome"]
+                break
+
+    # Se todos os pareceres têm erro (região inexistente), propaga o erro
+    if not resultado.get("erro"):
+        primeiro_erro = next(
+            (p.get("erro") for p in pareceres_brutos.values() if p.get("erro")), None
+        )
+        # Só propaga se TODOS tiverem erro (região realmente inexistente)
+        todos_com_erro = all(p.get("erro") for p in pareceres_brutos.values())
+        if todos_com_erro and primeiro_erro:
+            resultado["erro"] = primeiro_erro
+
+    return resultado
 
 
 # ---------------------------------------------------------------------------
