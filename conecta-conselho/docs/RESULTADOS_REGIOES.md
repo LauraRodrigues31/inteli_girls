@@ -10,7 +10,8 @@
 
 ## Tabela 1 — Score e Confiança por Agente e Região
 
-Todos os campos da base estão presentes e com valores válidos → confiança **alta** em todos os casos.
+Scores e confiança extraídos diretamente das tools (`analisar_mercado`, `analisar_impacto_social`, `analisar_engenharia`, `analisar_orcamento`, `analisar_pontes`).
+Nova União: `analisar_orcamento` retorna `confiança = baixa` pois a margem mensal é negativa (receita < OPEX) — campo `viavel_financeiramente = False`.
 
 | Região | Score Mercado | Conf. | Score Social | Conf. | Score Engenharia | Conf. | Score Orçamento | Conf. | Score Pontes | Conf. |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -19,7 +20,7 @@ Todos os campos da base estão presentes e com valores válidos → confiança *
 | Esperança | **63** | alta | **66** | alta | **34** | alta | **20** | alta | **43** | alta |
 | Central | **37** | alta | **30** | alta | **86** | alta | **76** | alta | **66** | alta |
 | Vale Verde | **56** | alta | **59** | alta | **58** | alta | **58** | alta | **80** | alta |
-| Nova União | **50** | alta | **78** | alta | **11** | alta | **0** | alta | **21** | alta |
+| Nova União | **50** | alta | **78** | alta | **11** | alta | **0** | **baixa** | **21** | alta |
 
 ### Metodologia dos sub-scores (resumo)
 
@@ -45,35 +46,34 @@ Critérios de recomendação (Seção 11, PADRÃO):
 - `aguardar`: 30 ≤ consolidado < 50
 - `escalar`: consolidado < 30
 
-Regras de divergência identificadas pelo Guardião:
-1. **D1** — `|social − orçamento| > 30`: alto impacto social vs. baixa viabilidade financeira
+Regras de divergência identificadas pelo Guardião (`_identificar_divergencias` em `tools/tool_guardiao.py`):
+1. **D1** — `|social − orçamento| > 30`: divergência nos **dois sentidos** — tanto orçamento alto com social baixo quanto social alto com orçamento baixo
 2. **D2** — `engenharia < 40` e `mercado > 60`: boa demanda mas viabilidade técnica baixa
 3. **D3** — `pontes > 70` e `orçamento < 40`: parcerias podem viabilizar o que o orçamento não consegue sozinho
 
 | Região | Consolidado | Recomendação | Divergências |
 |---|:---:|---|---|
-| Aurora | **62** | `realizar_piloto` | Nenhuma (social=38, orçamento=78: diff=40 → **D1 não dispara** pois é orçamento − social = +40, não social alto vs. orçamento baixo; eng=74 ≥ 40; pontes=64 < 70) |
-| Horizonte | **57** | `realizar_piloto` | **D1**: social=76, orçamento=60, diff=16 — não dispara. **Nota:** diff=16 < 30, sem divergência formal. Nenhuma D1/D2/D3. |
-| Esperança | **44** | `aguardar` | **D2**: engenharia=34 < 40 e mercado=63 > 60 (boa demanda, viabilidade técnica baixa). **D1**: social=66, orçamento=20, diff=46 > 30 (alto impacto social mas viabilidade financeira baixa). |
-| Central | **60** | `realizar_piloto` | Nenhuma (social=30, orçamento=76: social < orçamento, diff=46 mas é social baixo; eng=86 ≥ 40; pontes=66 < 70) |
-| Vale Verde | **60** | `realizar_piloto` | **D3**: pontes=80 > 70 e orçamento=58 — orçamento ≥ 40, D3 não dispara (orçamento não < 40). Nenhuma divergência formal. |
-| Nova União | **30** | `aguardar` ← regras atuais | **D1**: social=78, orçamento=0, diff=78 > 30 (alto impacto social, viabilidade financeira nula). **D2**: engenharia=11 < 40 e mercado=50 — mercado ≤ 60, D2 não dispara. |
+| Aurora | **62** | `realizar_piloto` | **D1**: \|social 38 − orçamento 78\| = 40 > 30 → alto orçamento contrastado com baixo impacto social |
+| Horizonte | **57** | `realizar_piloto` | Nenhuma (\|social 76 − orçamento 60\| = 16 < 30; eng=49 ≥ 40; pontes=43 < 70) |
+| Esperança | **44** | `aguardar` | **D1**: \|social 66 − orçamento 20\| = 46 > 30 (alto impacto social, baixa viabilidade financeira). **D2**: eng=34 < 40 e mercado=63 > 60 (boa demanda, viabilidade técnica insuficiente) |
+| Central | **60** | `realizar_piloto` | **D1**: \|social 30 − orçamento 76\| = 46 > 30 → alto orçamento contrastado com baixo impacto social |
+| Vale Verde | **60** | `realizar_piloto` | Nenhuma (\|social 59 − orçamento 58\| = 1 < 30; pontes=80 mas orçamento=58 ≥ 40) |
+| Nova União | **30** | `escalar` | **D1**: \|social 78 − orçamento 0\| = 78 > 30 (alto impacto social, viabilidade financeira nula). Escalonamento por: orçamento=0 < 20, engenharia=11 < 20 e confiança do Orçamento = baixa |
 
 ---
 
-> **Nota 1 — Nova União e a regra em aprovação:**
-> Pelos critérios atuais (Seção 11), Nova União tem consolidado = 30 e cai em `aguardar`
-> (30 ≤ consolidado < 50). Entretanto, o critério de conclusão 16.2 afirma que
-> *"Nova União recebe `escalar`"*, reconhecendo que o perfil da região (orçamento=0, engenharia=11)
-> é insuficiente para qualquer triagem positiva.
+> **Nota 1 — Nova União: recomendação `escalar`**
+> Consolidado = 30, que pelos critérios básicos cairia em `aguardar` (30 ≤ consolidado < 50).
+> A **regra extra adotada pelo grupo** (implementada em `_determinar_recomendacao` no `tools/tool_guardiao.py`)
+> força `escalar` quando: orçamento < 20 **OU** engenharia < 20 **OU** qualquer parecer com
+> `erro != null` ou `confianca == "baixa"`.
 >
-> **Regra extra em aprovação pelo grupo:**
-> _Escalar também quando: consolidado < 30, OU engenharia < 20, OU orçamento < 20,
-> OU qualquer parecer retornou `erro != null` ou `confianca == "baixa"`._
+> Nova União aciona três gatilhos simultâneos:
+> - orçamento = 0 < 20
+> - engenharia = 11 < 20
+> - confiança do Orçamento = `baixa` (margem mensal negativa)
 >
-> Com essa regra, Nova União (engenharia=11 < 20, orçamento=0 < 20) receberia `escalar`.
-> O teste `test_nova_uniao_recomendacao_escalar` (Seção 11) e o critério 16.2 já pressupõem
-> essa regra aprovada.
+> O teste `test_nova_uniao_recomendacao_escalar` e a saída real do Guardião confirmam `escalar`.
 
 > **Nota 2 — Nenhuma região atinge `investir_agora` com a base atual:**
 > O critério exige consolidado ≥ 70 **E** orçamento ≥ 60 **E** engenharia ≥ 60.
@@ -81,5 +81,5 @@ Regras de divergência identificadas pelo Guardião:
 
 ---
 
-*Gerado em: 2026-11-03 | Commit: `4cd4e92` | Branch: `docs/roteiro-demo`*
-*Script de cálculo: `%TEMP%\calcular_scores_cc2.py` (não commitado) | Fórmulas: PADRAO_DESENVOLVIMENTO_AGENTES.md Seções 6–11*
+*Gerado em: 2026-11-03 | Commit: `1010f96` | Branch: `docs/roteiro-demo`*
+*Fonte: saída real de `tools/tool_guardiao.py` (`consolidar_pareceres`) e tools especializadas | Fórmulas: PADRAO_DESENVOLVIMENTO_AGENTES.md Seções 6–11*
