@@ -11,7 +11,14 @@ import importlib.util
 import sys
 from pathlib import Path
 
-from tools.tool_pontes import analisar_pontes
+# ---------------------------------------------------------------------------
+# Import de tool_pontes pelo caminho do arquivo (padrão do grupo)
+# ---------------------------------------------------------------------------
+_TOOL_PATH = Path(__file__).resolve().parents[2] / "tools" / "tool_pontes.py"
+_tspec = importlib.util.spec_from_file_location("tool_pontes", _TOOL_PATH)
+_tmod = importlib.util.module_from_spec(_tspec)
+_tspec.loader.exec_module(_tmod)
+analisar_pontes = _tmod.analisar_pontes
 
 # ---------------------------------------------------------------------------
 # Import robusto de consultar_parcerias — funciona com hífen no nome do dir

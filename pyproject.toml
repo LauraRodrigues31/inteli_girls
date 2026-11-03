@@ -1,3 +1,0 @@
-[tool.pytest.ini_options]
-testpaths = ["conecta-conselho/tests"]
-pythonpath = ["."]
