@@ -44,7 +44,7 @@ flowchart TD
 | Engenharia | `cc_engenharia` | Dá para construir? | `tools/tool_engenharia.py` | `agents/agente_engenharia.yaml` |
 | Orçamento | `cc_orcamento` | Cabe no limite de custo e prazo? | `tools/tool_orcamento.py` | `agents/agente_orcamento.yaml` |
 | Pontes | `cc_pontes` | Dá para tornar a região viável? | `tools/tool_pontes.py` | `agents/agente_pontes.yaml` |
-| Guardião | `cc_guardiao` | O que fazemos? | *(sem tool própria)* | `agents/agente_guardiao.yaml` *(em desenvolvimento)* |
+| Guardião | `cc_guardiao` | O que fazemos? | `tools/tool_guardiao.py` | `agents/agente_guardiao.yaml` |
 
 ---
 
@@ -79,7 +79,7 @@ pip install -r requirements.txt
 python -m pytest -q
 ```
 
-A suíte atual roda **204 testes** (base de dados simulada) e passa sem erros.
+A suíte completa tem **mais de 500 testes** (incluindo os 204 da base de dados) e todos devem passar.
 
 ### Rodar uma tool isolada
 
@@ -104,7 +104,7 @@ import json; print(json.dumps(mod.montar_parecer('aurora'), ensure_ascii=False, 
 streamlit run conecta-conselho/app.py
 ```
 
-*(disponível após o merge da feature/streamlit)*
+Modo padrão: local (cálculos determinísticos, sem nuvem).
 
 ---
 
@@ -127,11 +127,13 @@ Critérios de recomendação (Seção 11 do [PADRAO_DESENVOLVIMENTO_AGENTES.md](
 | **Investir agora** | `score_consolidado ≥ 70` **E** `orcamento ≥ 60` **E** `engenharia ≥ 60` |
 | **Começar com piloto** | `score_consolidado ≥ 50` e NÃO atende critérios acima |
 | **Esperar** | `30 ≤ score_consolidado < 50` |
-| **Escalar a um humano** | `score_consolidado < 30` |
+| **Escalar a um humano** | `score_consolidado < 30`, OU `engenharia < 20`, OU `orcamento < 20`, OU algum parecer com erro ou confiança baixa |
+
+Esse escalonamento garante que casos bloqueados ou com dados incertos sejam decididos por uma pessoa.
 
 > ⚠️ Os pesos e limiares acima são **hipóteses do MVP** para fins de demonstração. Não representam metodologia real de decisão de investimento.
 
-Resultados por região: [RESULTADOS_REGIOES.md](conecta-conselho/docs/RESULTADOS_REGIOES.md) *(em elaboração)*
+Resultados por região: [RESULTADOS_REGIOES.md](conecta-conselho/docs/RESULTADOS_REGIOES.md)
 
 ---
 
@@ -145,6 +147,7 @@ A publicação no watsonx Orchestrate é feita por uma única pessoa do grupo. V
 
 - Todos os dados são simulados e fictícios; nenhum indicador representa localidade real.
 - O sistema **apoia a triagem** de oportunidades — não autoriza investimentos, obras ou contratos.
+- Não há mapas, geolocalização nem geoprocessamento.
 - Não substitui análise de campo, regulação ou negociação comercial.
 
 ---
