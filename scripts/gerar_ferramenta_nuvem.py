@@ -216,6 +216,20 @@ def _stmt_deve_remover(node: ast.stmt, src_lines: list[str]) -> bool:
             if isinstance(t, ast.Name) and t.id in {"_ROOT", "_CONECTA_CONSELHO_DIR"}:
                 return True
 
+    # Try/except ImportError que envolve o import do ADK:
+    #   try:
+    #       from ibm_watsonx_orchestrate... import tool as _tool_decorator
+    #   except ImportError:
+    #       def _tool_decorator(fn): return fn
+    # No runtime em nuvem o ADK está sempre disponível — este bloco causa
+    # o registo com um nome diferente (_tool_decorator) que o ADK não reconhece.
+    if isinstance(node, ast.Try):
+        src = "\n".join(src_lines[node.lineno - 1 : node.end_lineno])
+        if "ibm_watsonx_orchestrate" in src and "_tool_decorator" in src:
+            return True
+        if "ibm_watsonx_orchestrate" in src and "_ADK_DISPONIVEL" in src:
+            return True
+
     return False
 
 
@@ -344,6 +358,8 @@ from __future__ import annotations
 
 import sys
 
+from ibm_watsonx_orchestrate.agent_builder.tools import tool
+
 """
 
 
@@ -377,6 +393,23 @@ def _gerar_arquivo(nome: str) -> str:
 
     # 4. Corpo da ferramenta (limpo)
     corpo = _extrair_corpo_ferramenta(nome)
+
+    # Substitui usos de _tool_decorator por tool (padrão canónico do ADK)
+    # Isso cobre o caso de tool_mercado.py e tool_social.py que usam
+    # try/except ImportError com um nome alternativo para o decorator.
+    corpo = corpo.replace("@_tool_decorator\n", "@tool\n")
+    corpo = corpo.replace("@_tool_decorator\r\n", "@tool\r\n")
+
+    # Remove variável _ADK_DISPONIVEL se sobrou (tool_social.py define-a no try/except)
+    import re as _re
+    corpo = _re.sub(r"^\s*_ADK_DISPONIVEL\s*=.*\n?", "", corpo, flags=_re.MULTILINE)
+
+    # Remove o import do ADK se sobrou no corpo (já está no header)
+    corpo = _re.sub(
+        r"^\s*from ibm_watsonx_orchestrate\.agent_builder\.tools import tool.*\n?",
+        "", corpo, flags=_re.MULTILINE
+    )
+
     corpo = _colapsar_brancos(corpo.lstrip("\n"), max_blanks=2)
 
     # Validação de sintaxe antes de retornar
