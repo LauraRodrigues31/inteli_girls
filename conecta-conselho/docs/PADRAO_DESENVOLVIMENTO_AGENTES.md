@@ -1,7 +1,9 @@
 # PADRÃO DE DESENVOLVIMENTO — Conecta Conselho
 
 > **Fonte única de verdade para o desenvolvimento do MVP.**
-> Versão: 1.0.0 | Sistema: Conecta Conselho | Público: cinco integrantes da equipe de desenvolvimento
+> Versão: 1.1.0 | Sistema: Conecta Conselho | Público: cinco integrantes da equipe de desenvolvimento
+>
+> **Changelog v1.1.0:** adicionado campo obrigatório `tipo_resultado` (`"parecer"` / `"erro"`) à saída de todos os agentes especialistas (Seção 3.2). Padronizado texto exato da primeira `limitacao` como `"Dado simulado — não reflete condições reais."` (com ponto final).
 >
 > ⚠️ **Todos os dados da base simulada são FICTÍCIOS.** Não representam indicadores reais de nenhuma região do Brasil.
 
@@ -94,13 +96,16 @@ flowchart TD
 | Funções de consulta | `conecta-conselho/tools/consultar_regiao.py` | ✅ Implementado |
 | Testes da base | `conecta-conselho/tests/test_dados_regioes.py` | ✅ Implementado (204 testes) |
 | CSV tabular | `conecta-conselho/data/regioes.csv` | ✅ Gerado |
+| Agente Impacto Social (ferramenta) | `tools/tool_social.py` | ✅ Implementado |
+| Agente Impacto Social (YAML) | `agents/agente_social.yaml` | ✅ Implementado |
+| Testes do Agente Social | `conecta-conselho/tests/test_agente_social.py` | ✅ Implementado (149 testes) |
 
 ### 1.6 Componentes a Implementar
 
 | Componente | Caminho previsto | Status |
 |---|---|---|
-| YAML dos agentes especialistas | `agents/agente_<nome>.yaml` | ⬜ A IMPLEMENTAR |
-| Ferramentas Python dos agentes | `tools/tool_<nome>.py` | ⬜ A IMPLEMENTAR |
+| YAML dos agentes restantes | `agents/agente_mercado|engenharia|orcamento|pontes.yaml` | ⬜ A IMPLEMENTAR |
+| Ferramentas Python restantes | `tools/tool_mercado|engenharia|orcamento|pontes.py` | ⬜ A IMPLEMENTAR |
 | YAML do Guardião | `agents/agente_guardiao.yaml` | ⬜ A IMPLEMENTAR |
 | Interface Streamlit | `conecta-conselho/app.py` | ⬜ A IMPLEMENTAR |
 | Testes de integração | `conecta-conselho/tests/test_integracao.py` | ⬜ A IMPLEMENTAR |
@@ -216,6 +221,7 @@ Todos os cinco agentes especialistas **obrigatoriamente** retornam este formato:
   "regiao_nome": "Região Aurora",
   "score": 72,
   "confianca": "alta",
+  "tipo_resultado": "parecer",
   "indicadores": {
     "campo_bruto_1": 185000,
     "campo_calculado_1": 3.18,
@@ -227,7 +233,7 @@ Todos os cinco agentes especialistas **obrigatoriamente** retornam este formato:
     "Descrição objetiva do risco 2"
   ],
   "limitacoes": [
-    "Dado simulado — não reflete mercado real",
+    "Dado simulado — não reflete condições reais.",
     "Concorrência pode ser subestimada"
   ],
   "simulado": true,
@@ -243,11 +249,12 @@ Todos os cinco agentes especialistas **obrigatoriamente** retornam este formato:
 | `regiao_id` | `string` | Sim | ID exato da região consultada |
 | `regiao_nome` | `string` | Sim | Nome completo da região |
 | `score` | `integer` | Sim | `0` a `100` inclusive. Inteiro. Nunca `null`. Ver metodologia por agente (Seções 6–10). |
-| `confianca` | `string` | Sim | `"alta"`, `"media"` ou `"baixa"`. Ver regra 3.3. |
+| `confianca` | `string` | Sim | `"alta"`, `"media"`, `"baixa"` ou `"nao_avaliada"`. Ver regra 3.3. |
+| `tipo_resultado` | `string` | Sim | `"parecer"` em caso de sucesso; `"erro"` em caso de falha. Permite que o Guardião distinga score=0 de erro de score=0 de parecer válido. |
 | `indicadores` | `object` | Sim | Dados brutos e calculados relevantes. Nunca vazio. |
 | `justificativa` | `string` | Sim | Texto explicativo em português. Mínimo 50 caracteres. |
 | `riscos` | `array[string]` | Sim | Lista não vazia de riscos identificados. |
-| `limitacoes` | `array[string]` | Sim | Sempre incluir `"Dado simulado — não reflete condições reais"`. |
+| `limitacoes` | `array[string]` | Sim | Primeira entrada sempre `"Dado simulado — não reflete condições reais."` (texto exato, com ponto final). |
 | `simulado` | `boolean` | Sim | Sempre `true` neste MVP. |
 | `erro` | `string\|null` | Sim | `null` em caso de sucesso. Mensagem descritiva em caso de falha. |
 
@@ -273,6 +280,7 @@ Quando `regiao_id` não existe ou ocorre falha irrecuperável:
   "regiao_nome": null,
   "score": 0,
   "confianca": "nao_avaliada",
+  "tipo_resultado": "erro",
   "indicadores": {},
   "justificativa": "Região 'inexistente' não encontrada na base de dados. IDs válidos: aurora, horizonte, esperanca, central, vale_verde, nova_uniao.",
   "riscos": [],
@@ -328,8 +336,9 @@ Quando `regiao_id` não existe ou ocorre falha irrecuperável:
   "agente": "impacto_social",
   "regiao_id": "horizonte",
   "regiao_nome": "Região Horizonte",
-  "score": 88,
+  "score": 76,
   "confianca": "alta",
+  "tipo_resultado": "parecer",
   "indicadores": {
     "percentual_domicilios_sem_internet": 72,
     "quantidade_escolas": 61,
@@ -340,15 +349,19 @@ Quando `regiao_id` não existe ou ocorre falha irrecuperável:
     "percentual_saude_sem_conectividade": 74.1,
     "percentual_populacao_baixa_renda": 64,
     "indice_vulnerabilidade_social": 74,
-    "pessoas_potencialmente_beneficiadas": 101376
+    "pessoas_potencialmente_beneficiadas": 101376,
+    "score_exclusao_digital": 72,
+    "score_infraestrutura_social": 76,
+    "score_vulnerabilidade": 74,
+    "score_alcance": 84
   },
-  "justificativa": "A Região Horizonte apresenta os maiores indicadores de exclusão digital da base: 72% dos domicílios sem internet, 74 pontos no índice de vulnerabilidade social e 101.376 pessoas potencialmente beneficiadas. O impacto social da expansão seria o mais alto entre todas as regiões analisadas.",
+  "justificativa": "A Região Horizonte apresenta 72% dos domicílios sem acesso à internet, índice de vulnerabilidade social de 74/100 e 101.376 pessoas potencialmente beneficiadas pela expansão. 78.7% das escolas e 74.1% das unidades de saúde carecem de conectividade adequada. Score de impacto social calculado: 76/100.",
   "riscos": [
-    "Baixa renda média pode limitar adesão e sustentabilidade financeira",
-    "Alta vulnerabilidade social exige modelo de plano subsidiado"
+    "Baixa renda média pode limitar adesão sem modelo de plano subsidiado",
+    "Alta vulnerabilidade social exige políticas complementares à expansão isolada"
   ],
   "limitacoes": [
-    "Dado simulado — não reflete condições sociais reais",
+    "Dado simulado — não reflete condições reais.",
     "Índice de vulnerabilidade social é proxy simulado, não metodologia IBGE"
   ],
   "simulado": true,
