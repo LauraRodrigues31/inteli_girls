@@ -207,6 +207,27 @@ def _determinar_recomendacao(score: int, pareceres: dict) -> str:
     return "aguardar"
 
 
+def _fmt_brl(valor: float) -> str:
+    """Formata valor monetario em reais no padrao brasileiro: R$ 9.000.000 ou R$ 81.288,16."""
+    negativo = valor < 0
+    abs_val = abs(valor)
+    if round(abs_val % 1, 6) != 0:
+        # tem centavos
+        int_fmt = f"{int(abs_val):,}".replace(",", ".")
+        centavos = round((abs_val - int(abs_val)) * 100)
+        result = f"R$ {int_fmt},{centavos:02d}"
+    else:
+        int_fmt = f"{int(abs_val):,}".replace(",", ".")
+        result = f"R$ {int_fmt}"
+    return f"R$ -{result[3:]}" if negativo else result
+
+
+def _fmt_pct(valor: float) -> str:
+    """Formata percentual no padrao brasileiro: 57,5%."""
+    s = f"{valor:.1f}".replace(".", ",")
+    return f"{s}%"
+
+
 def _calcular_atencao_prioritaria(score: int, pareceres: dict) -> tuple[bool, list[str]]:
     """
     Retorna (atencao_prioritaria: bool, pontos_criticos: list[str]).
@@ -215,6 +236,7 @@ def _calcular_atencao_prioritaria(score: int, pareceres: dict) -> tuple[bool, li
       - orcamento < 20
       - score_consolidado < 30
       - qualquer parecer com confianca "baixa"
+    Frases montadas a partir dos indicadores do parecer, nao da justificativa.
     """
     pontos: list[str] = []
 
@@ -222,17 +244,37 @@ def _calcular_atencao_prioritaria(score: int, pareceres: dict) -> tuple[bool, li
     orc_score = int(pareceres["orcamento"]["score"])
 
     if orc_score < 20:
-        just = pareceres["orcamento"].get("justificativa", "")
-        trecho = just[:80] if just else "verificar indicadores financeiros"
+        ind_orc = pareceres["orcamento"].get("indicadores") or {}
+        margem = ind_orc.get("margem_mensal_reais")
+        cobertura = ind_orc.get("cobertura_orcamentaria_pct")
+        deficit = ind_orc.get("deficit_orcamentario_reais")
+        partes = []
+        if isinstance(margem, (int, float)):
+            partes.append(f"margem mensal de {_fmt_brl(margem)}")
+        if isinstance(cobertura, (int, float)):
+            partes.append(f"cobertura orçamentária de {_fmt_pct(cobertura)}")
+        if isinstance(deficit, (int, float)) and deficit > 0:
+            partes.append(f"déficit de {_fmt_brl(deficit)}")
+        detalhe = "; ".join(partes) if partes else "verificar indicadores financeiros"
         pontos.append(
-            f"Orcamento com score {orc_score}: {trecho}."
+            f"Orçamento com score {orc_score}: {detalhe}."
         )
 
     if eng_score < 20:
-        just = pareceres["engenharia"].get("justificativa", "")
-        trecho = just[:80] if just else "verificar indicadores tecnicos"
+        ind_eng = pareceres["engenharia"].get("indicadores") or {}
+        dist = ind_eng.get("distancia_backbone_km")
+        cobertura_fibra = ind_eng.get("percentual_cobertura_fibra")
+        prazo = ind_eng.get("prazo_implantacao_meses")
+        partes = []
+        if isinstance(dist, (int, float)):
+            partes.append(f"backbone a {int(dist)} km")
+        if isinstance(cobertura_fibra, (int, float)):
+            partes.append(f"{int(cobertura_fibra)}% de cobertura de fibra")
+        if isinstance(prazo, (int, float)):
+            partes.append(f"prazo de implantação de {int(prazo)} meses")
+        detalhe = "; ".join(partes) if partes else "verificar indicadores técnicos"
         pontos.append(
-            f"Engenharia com score {eng_score}: {trecho}."
+            f"Engenharia com score {eng_score}: {detalhe}."
         )
 
     if score < 30:
@@ -242,8 +284,9 @@ def _calcular_atencao_prioritaria(score: int, pareceres: dict) -> tuple[bool, li
 
     for agente, p in pareceres.items():
         if p.get("confianca") == "baixa":
+            nome = agente.replace("_", " ").capitalize()
             pontos.append(
-                f"Confianca baixa no parecer de {agente.replace('_', ' ').capitalize()}."
+                f"Confiança baixa no parecer de {nome}."
             )
 
     return (len(pontos) > 0, pontos)
@@ -252,63 +295,133 @@ def _calcular_atencao_prioritaria(score: int, pareceres: dict) -> tuple[bool, li
 def _calcular_motivos_e_caminhos(pareceres: dict) -> tuple[list[str], list[str]]:
     """
     Retorna (motivos, caminhos) — preenchidos APENAS quando recomendacao == 'aguardar'.
-    Motivos: uma frase por agente com score < 50, usando a justificativa do parecer.
+    Motivos: uma frase por agente com score < 50, construida a partir dos indicadores.
     Caminhos: extraidos de campos reais dos pareceres (sem inventar).
     """
     motivos: list[str] = []
     caminhos: list[str] = []
 
-    # Motivos: agentes com score < 50
+    ind_eng  = pareceres["engenharia"].get("indicadores") or {}
+    ind_pont = pareceres["pontes"].get("indicadores") or {}
+    ind_orc  = pareceres["orcamento"].get("indicadores") or {}
+    ind_merc = pareceres["mercado"].get("indicadores") or {}
+    ind_soc  = pareceres["impacto_social"].get("indicadores") or {}
+
+    # Motivos: agentes com score < 50, frases construidas dos indicadores
     for agente in _AGENTES_VALIDOS:
         p = pareceres[agente]
         sc = int(p.get("score", 0))
-        if sc < 50:
-            just = p.get("justificativa", "")
-            trecho = just[:120] if just else f"score {sc} abaixo do limiar de viabilidade."
-            motivos.append(
-                f"{agente.replace('_', ' ').capitalize()} (score {sc}): {trecho}."
-            )
+        if sc >= 50:
+            continue
+
+        if agente == "engenharia":
+            dist = ind_eng.get("distancia_backbone_km")
+            cob  = ind_eng.get("percentual_cobertura_fibra")
+            prazo = ind_eng.get("prazo_implantacao_meses")
+            partes = []
+            if isinstance(dist, (int, float)):
+                partes.append(f"backbone a {int(dist)} km")
+            if isinstance(cob, (int, float)):
+                partes.append(f"{int(cob)}% de cobertura de fibra")
+            if isinstance(prazo, (int, float)):
+                partes.append(f"prazo de {int(prazo)} meses")
+            detalhe = "; ".join(partes) if partes else f"score {sc} abaixo do limiar de viabilidade"
+            motivos.append(f"Engenharia (score {sc}): {detalhe}.")
+
+        elif agente == "orcamento":
+            cob_orc = ind_orc.get("cobertura_orcamentaria_pct")
+            deficit = ind_orc.get("deficit_orcamentario_reais")
+            payback = ind_orc.get("payback_meses")
+            margem  = ind_orc.get("margem_mensal_reais")
+            partes = []
+            if isinstance(cob_orc, (int, float)):
+                cob_str = _fmt_pct(cob_orc)
+                if isinstance(deficit, (int, float)) and deficit > 0:
+                    partes.append(f"orçamento cobre {cob_str} do CAPEX (déficit de {_fmt_brl(deficit)})")
+                else:
+                    partes.append(f"orçamento cobre {cob_str} do CAPEX")
+            if payback is None:
+                partes.append("payback indefinido (margem negativa)")
+            elif isinstance(payback, (int, float)):
+                partes.append(f"payback de {int(payback)} meses")
+            if isinstance(margem, (int, float)) and margem <= 0:
+                partes.append(f"margem mensal negativa ({_fmt_brl(margem)})")
+            detalhe = "; ".join(partes) if partes else f"score {sc} abaixo do limiar de viabilidade"
+            motivos.append(f"Orçamento (score {sc}): {detalhe}.")
+
+        elif agente == "pontes":
+            total = ind_pont.get("total_parceiros_possiveis")
+            matur = ind_pont.get("maturidade_parcerias")
+            partes = []
+            if isinstance(total, int):
+                partes.append(f"{total} parceiros possíveis")
+            if isinstance(matur, str):
+                partes.append(f"maturidade de parcerias {matur}")
+            detalhe = "; ".join(partes) if partes else f"score {sc} abaixo do limiar de viabilidade"
+            motivos.append(f"Pontes (score {sc}): {detalhe}.")
+
+        elif agente == "mercado":
+            # usa indicadores se disponíveis, caso contrário descreve o score
+            pop = ind_merc.get("populacao_alvo") or ind_merc.get("populacao")
+            penetracao = ind_merc.get("taxa_penetracao_esperada_pct") or ind_merc.get("penetracao_esperada_pct")
+            partes = []
+            if isinstance(pop, (int, float)) and pop > 0:
+                partes.append(f"população-alvo de {int(pop):,}".replace(",", "."))
+            if isinstance(penetracao, (int, float)):
+                partes.append(f"penetração esperada de {_fmt_pct(penetracao)}")
+            detalhe = "; ".join(partes) if partes else f"score {sc} abaixo do limiar de viabilidade"
+            motivos.append(f"Mercado (score {sc}): {detalhe}.")
+
+        else:  # impacto_social
+            pop_ben = ind_soc.get("populacao_beneficiada") or ind_soc.get("populacao_alvo")
+            idh = ind_soc.get("idh") or ind_soc.get("indice_idh")
+            partes = []
+            if isinstance(pop_ben, (int, float)) and pop_ben > 0:
+                partes.append(f"população beneficiada de {int(pop_ben):,}".replace(",", "."))
+            if isinstance(idh, (int, float)):
+                partes.append(f"IDH {idh:.3f}")
+            detalhe = "; ".join(partes) if partes else f"score {sc} abaixo do limiar de viabilidade"
+            motivos.append(f"Impacto social (score {sc}): {detalhe}.")
 
     # Caminhos: extraidos de campos existentes nos pareceres
-    ind_eng  = pareceres["engenharia"].get("indicadores", {}) or {}
-    ind_pont = pareceres["pontes"].get("indicadores", {}) or {}
-    ind_orc  = pareceres["orcamento"].get("indicadores", {}) or {}
-
     # Tecnologias viaveis (engenharia)
     tecnologias = ind_eng.get("tecnologias_viaveis")
     if tecnologias and isinstance(tecnologias, list) and tecnologias:
         lista = ", ".join(str(t) for t in tecnologias[:3])
-        caminhos.append(f"Tecnologias alternativas viaveis: {lista}.")
+        caminhos.append(f"Tecnologias alternativas viáveis: {lista}.")
 
     # Parcerias (pontes)
     oportunidades_red = ind_pont.get("oportunidades_reducao_custos")
     if oportunidades_red and isinstance(oportunidades_red, list) and oportunidades_red:
         caminhos.append(
-            f"Oportunidades de reducao de custos via parcerias: "
+            f"Oportunidades de redução de custos via parcerias: "
             f"{oportunidades_red[0]}."
         )
     infra_comp = ind_pont.get("infraestrutura_compartilhavel")
     if infra_comp is True:
-        caminhos.append("Infraestrutura compartilhavel identificada: pode reduzir CAPEX.")
+        caminhos.append("Infraestrutura compartilhável identificada: pode reduzir CAPEX.")
     ancora = ind_pont.get("quantidade_instituicoes_ancora")
     if isinstance(ancora, int) and ancora > 0:
         pct = ind_pont.get("percentual_economia_potencial_pct")
         if isinstance(pct, (int, float)):
             caminhos.append(
-                f"{ancora} instituicoes ancora identificadas com potencial de "
-                f"economia de {pct}% nos custos."
+                f"{ancora} instituições âncora identificadas com potencial de "
+                f"economia de {_fmt_pct(pct)} nos custos."
             )
 
     # Orcamento em fases
     deficit = ind_orc.get("deficit_orcamentario_reais")
     cobertura = ind_orc.get("cobertura_orcamentaria_pct")
     if isinstance(cobertura, (int, float)) and cobertura > 0:
-        caminhos.append(
-            f"Implantacao em fases: o orcamento cobre {cobertura:.1f}% do CAPEX "
-            f"(deficit de R$ {deficit:,.0f})."
-            if isinstance(deficit, (int, float)) and deficit > 0
-            else f"Implantacao em fases: o orcamento cobre {cobertura:.1f}% do CAPEX."
-        )
+        if isinstance(deficit, (int, float)) and deficit > 0:
+            caminhos.append(
+                f"Implantação em fases: o orçamento cobre {_fmt_pct(cobertura)} do CAPEX "
+                f"(déficit de {_fmt_brl(deficit)})."
+            )
+        else:
+            caminhos.append(
+                f"Implantação em fases: o orçamento cobre {_fmt_pct(cobertura)} do CAPEX."
+            )
 
     return motivos, caminhos
 
@@ -316,6 +429,7 @@ def _calcular_motivos_e_caminhos(pareceres: dict) -> tuple[list[str], list[str]]
 def _identificar_divergencias(pareceres: dict) -> list[str]:
     """
     Tres regras da Secao 11 (D1 nos dois sentidos com abs) + pareceres com erro.
+    D1 tem texto diferente conforme a direcao da divergencia.
     """
     divergencias: list[str] = []
 
@@ -325,14 +439,21 @@ def _identificar_divergencias(pareceres: dict) -> list[str]:
     s_merc   = int(pareceres["mercado"]["score"])
     s_pont   = int(pareceres["pontes"]["score"])
 
-    # D1: alto impacto social vs baixa viabilidade financeira (abs, dois sentidos)
+    # D1: divergencia entre impacto social e orcamento (abs > 30)
     if abs(s_social - s_orc) > 30:
-        maior, menor = ("impacto_social", "orcamento") if s_social > s_orc else ("orcamento", "impacto_social")
-        divergencias.append(
-            f"Alto {maior.replace('_',' ')} (score {max(s_social,s_orc)}) "
-            f"contrastado com baixo {menor.replace('_',' ')} (score {min(s_social,s_orc)}). "
-            f"Parcerias e subsidios podem ser necessarios para viabilizacao."
-        )
+        if s_orc > s_social:
+            # Direcao inversa: orcamento alto, impacto social baixo
+            divergencias.append(
+                f"Região financeiramente atrativa (orçamento {s_orc}), mas com baixo "
+                f"impacto social (social {s_social}): avaliar contrapartidas sociais na expansão."
+            )
+        else:
+            # Direcao original: impacto social alto, orcamento baixo
+            divergencias.append(
+                f"Alto impacto social (score {s_social}) contrastado com baixa "
+                f"viabilidade financeira (orçamento {s_orc}). "
+                f"Parcerias e subsídios podem ser necessários para viabilização."
+            )
 
     # D2: boa demanda mas viabilidade tecnica baixa
     if s_eng < 40 and s_merc > 60:
