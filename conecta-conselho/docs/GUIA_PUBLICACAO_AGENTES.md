@@ -5,6 +5,10 @@
 > **Instância:** lida de `WXO_URL` no `.env`
 > **Última atualização:** Etapa 4 concluída — todos os 4 testes passaram ✅
 
+> ⚠️ **PUBLICAÇÃO É RESPONSABILIDADE EXCLUSIVA DA LAURA.**
+> Nenhuma outra integrante deve rodar `scripts\publicar_agente.ps1`, `orchestrate tools import` nem `orchestrate agents import`.
+> As demais integrantes contribuem com o código e os testes locais; a publicação no watsonx Orchestrate é centralizada.
+
 ---
 
 ## Índice
@@ -120,10 +124,12 @@ flowchart TD
 
 ---
 
-## 5. Publicação via Script (recomendado)
+## 5. Publicação via Script (somente Laura)
+
+> ⚠️ **Apenas a Laura deve executar estes comandos.** As demais integrantes não devem rodar `publicar_agente.ps1` nem comandos `orchestrate` de import ou remove.
 
 ```powershell
-# Na raiz do workspace
+# Na raiz do workspace — executar SOMENTE como Laura
 scripts\publicar_agente.ps1 -Nome engenharia
 
 # Outros agentes
@@ -304,12 +310,10 @@ A ferramenta gerada usa `"Nenhuma região com id 'X' foi encontrada..."` (de `_r
 
 | Regra | Detalhe |
 |-------|---------|
-| **Só mexa no seu recurso** | Cada integrante é responsável pelo agente com seu próprio nome. Não importe, altere ou remova recursos de outras integrantes. |
-| **Avise antes de publicar** | Mande mensagem no grupo antes de rodar `publicar_agente.ps1`. Aguarde confirmação de que ninguém está publicando simultaneamente. |
-| **Uma pessoa por vez** | Publicações simultâneas causam conflito de versão no ADK. Sempre aguarde a conclusão de uma publicação antes de iniciar outra. |
+| **Publicação é exclusiva da Laura** | Somente a Laura executa `scripts\publicar_agente.ps1`, `orchestrate tools import` ou `orchestrate agents import`. As demais integrantes **não devem rodar esses comandos**. |
 | **Nunca rode `orchestrate chat ask`** | Trava o terminal no Windows com EOF infinito. Use Agent Builder → Preview ou a API REST. |
 | **Não edite `_build/tool_*_nuvem.py` à mão** | Esses arquivos são gerados automaticamente. Edições manuais serão sobrescritas na próxima publicação. |
-| **Rode pytest antes de publicar** | `python -m pytest -q` deve passar 100% antes de qualquer publicação. |
+| **Rode pytest antes de publicar** | `python -m pytest -q` deve passar 100% antes de qualquer publicação — responsabilidade da Laura antes de cada deploy. |
 
 ---
 
