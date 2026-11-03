@@ -95,9 +95,11 @@ mas possível em versões futuras), o agente:
 1. Calcula os sub-scores com `0` para campos ausentes (determinístico, sem exceção)
 2. Registra `confianca="baixa"` no parecer
 3. Adiciona aviso explícito nas `limitacoes` com os nomes dos campos ausentes
-4. Mantém `tipo_resultado="parecer"` — **não converte para "erro"** (decisão do contrato do grupo)
 
-O Guardião deve usar `confianca` e o texto das `limitacoes` para identificar pareceres parciais.
+**Como o Guardião interpreta:**
+- **Erro fatal** (região não encontrada): `erro != null` **e** `confianca == "nao_avaliada"`.
+- **Parecer parcial** (dados incompletos): `confianca == "baixa"`. O texto de `limitacoes` é apenas informativo.
+- **Parecer válido** (dados completos): `erro == null` e `confianca` em `{"alta", "media"}`.
 
 ---
 

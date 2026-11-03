@@ -56,7 +56,6 @@ CAMPOS_OBRIGATORIOS_CONTRATO = [
     "regiao_nome",
     "score",
     "confianca",
-    "tipo_resultado",
     "indicadores",
     "justificativa",
     "riscos",
@@ -595,12 +594,25 @@ class TestContratoAnalisarImpactoSocial:
         assert resultado["regiao_id"] == regiao_id
 
     @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
-    def test_tipo_resultado_e_parecer_para_regioes_validas(self, regiao_id):
-        """Regiões válidas devem retornar tipo_resultado='parecer', nunca 'erro'."""
+    def test_tipo_resultado_nao_presente_na_saida(self, regiao_id):
+        """
+        'tipo_resultado' NÃO faz parte do contrato v1.0.
+        O Guardião identifica erro por erro != null e confianca == 'nao_avaliada'.
+        """
         resultado = _extrair_conteudo(analisar_impacto_social(regiao_id))
-        assert resultado["tipo_resultado"] == "parecer", (
-            f"tipo_resultado deveria ser 'parecer' para '{regiao_id}', "
-            f"recebeu '{resultado['tipo_resultado']}'"
+        assert "tipo_resultado" not in resultado, (
+            f"Campo 'tipo_resultado' não deve estar na saída para '{regiao_id}' "
+            f"(contrato v1.0 tem exatamente 11 campos)"
+        )
+
+    @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
+    def test_chaves_sao_exatamente_os_11_campos_do_contrato(self, regiao_id):
+        """A saída de um parecer válido deve ter exatamente os 11 campos do contrato v1.0."""
+        resultado = _extrair_conteudo(analisar_impacto_social(regiao_id))
+        assert set(resultado.keys()) == set(CAMPOS_OBRIGATORIOS_CONTRATO), (
+            f"Chaves divergem do contrato para '{regiao_id}'.\n"
+            f"  Esperado : {sorted(CAMPOS_OBRIGATORIOS_CONTRATO)}\n"
+            f"  Recebido : {sorted(resultado.keys())}"
         )
 
     @pytest.mark.parametrize("regiao_id", IDS_VALIDOS)
@@ -623,7 +635,8 @@ class TestContratoAnalisarImpactoSocial:
 class TestSinalizacaoDadosAusentes:
     """
     Valida que ausências de campos obrigatórios são sinalizadas explicitamente
-    nas limitacoes do parecer, sem quebrar o contrato (tipo_resultado="parecer").
+    nas limitacoes do parecer. O Guardião identifica pareceres parciais por
+    confianca == 'baixa'. O texto de limitacoes é apenas informativo.
 
     Estes testes usam funções internas diretamente (sem @tool) para simular
     dados parciais, já que a base real sempre tem todos os campos.
@@ -702,22 +715,23 @@ class TestSinalizacaoDadosAusentes:
                 f"Região '{regiao_id}' não deveria ter aviso de campo ausente"
             )
 
-    def test_tipo_resultado_permanece_parecer_com_dados_incompletos(self):
+    def test_guardiao_identifica_erro_por_erro_e_confianca(self):
         """
-        Mesmo com dados parciais, o contrato exige tipo_resultado='parecer'.
-        A sinalização ocorre via confianca e limitacoes, não via tipo_resultado.
-        Valida que a decisão de design foi preservada.
+        O Guardião identifica erro por erro != null e confianca == 'nao_avaliada'.
+        Valida que a resposta de erro satisfaz esses dois critérios.
+        Pareceres parciais (dados incompletos) são identificados por confianca == 'baixa'.
         """
-        # Verifica via _montar_resposta_erro que o único caminho para tipo='erro'
-        # é região inexistente — não dados incompletos.
         resposta_erro = _montar_resposta_erro("xyz", "não existe")
-        assert resposta_erro["tipo_resultado"] == "erro"
-        # Para regiões válidas, sempre "parecer" independentemente da confianca
+        assert resposta_erro["erro"] is not None
+        assert resposta_erro["confianca"] == "nao_avaliada"
+        # Para regiões válidas, erro é None (nunca nao_avaliada)
         for regiao_id in IDS_VALIDOS:
             resultado = _extrair_conteudo(analisar_impacto_social(regiao_id))
-            assert resultado["tipo_resultado"] == "parecer", (
-                f"tipo_resultado deveria ser 'parecer' para '{regiao_id}', "
-                f"mas confianca={resultado['confianca']} — dados da base estão completos"
+            assert resultado["erro"] is None, (
+                f"Região válida '{regiao_id}' não deve ter erro"
+            )
+            assert resultado["confianca"] != "nao_avaliada", (
+                f"Região válida '{regiao_id}' não deve ter confianca='nao_avaliada'"
             )
 
 
@@ -832,25 +846,24 @@ class TestTratamentoErro:
         assert resultado["erro"] is None
         assert resultado["score"] > 0
 
-    def test_regiao_inexistente_tipo_resultado_e_erro(self):
+    def test_regiao_inexistente_identificada_por_erro_e_confianca(self):
         """
-        Região inexistente deve retornar tipo_resultado='erro', não 'parecer'.
-        Garante que score=0 de erro não seja confundido com parecer válido de score 0.
+        Região inexistente é identificada pelo Guardião por:
+          erro != null  E  confianca == 'nao_avaliada'
+        Não depende de tipo_resultado (campo removido do contrato v1.0).
         """
         resultado = _extrair_conteudo(analisar_impacto_social("nao_existe"))
-        assert resultado["tipo_resultado"] == "erro", (
-            f"tipo_resultado deveria ser 'erro' para região inexistente, "
-            f"recebeu '{resultado['tipo_resultado']}'"
-        )
+        assert resultado["erro"] is not None
+        assert resultado["confianca"] == "nao_avaliada"
 
-    def test_tipo_resultado_distingue_erro_de_score_zero_valido(self):
+    def test_erro_score_zero_distinguivel_de_score_zero_valido(self):
         """
-        Um parecer válido com score 0 (tipo_resultado='parecer') deve ser
-        distinguível de uma resposta de erro (tipo_resultado='erro').
-        Garante que o Guardião não descarte pareceres válidos por terem score baixo.
+        Um parecer válido com score 0 e uma resposta de erro ambos têm score=0.
+        O Guardião os distingue por: erro != null para erros, erro == null para pareceres.
         """
         resposta_erro = _montar_resposta_erro("xyz", "Região não encontrada: 'xyz'")
-        assert resposta_erro["tipo_resultado"] == "erro"
+        assert resposta_erro["erro"] is not None
+        assert resposta_erro["confianca"] == "nao_avaliada"
         assert resposta_erro["score"] == 0
 
         dados_sem_exclusao = {
@@ -865,9 +878,8 @@ class TestTratamentoErro:
         }
         _, score_valido = _calcular_indicadores_sociais(dados_sem_exclusao)
         assert score_valido == 0
-        # O campo tipo_resultado distingue os dois casos:
-        # - resposta_erro["tipo_resultado"] == "erro"   → região não existe
-        # - parecer válido com score 0 → tipo_resultado == "parecer"
+        # Distinção: erro != null (resposta_erro) vs erro == null (parecer válido)
+        # confianca == 'nao_avaliada' (erro) vs confianca em {'alta','media','baixa'} (parecer)
 
 
 # ---------------------------------------------------------------------------
@@ -877,8 +889,8 @@ class TestTratamentoErro:
 
 class TestEstruturaRespostaErroCompleta:
     """
-    Valida que _montar_resposta_erro produz exatamente a estrutura do contrato,
-    incluindo o campo tipo_resultado='erro'.
+    Valida que _montar_resposta_erro produz exatamente a estrutura do contrato v1.0
+    (11 campos). O Guardião identifica erro por erro != null e confianca == 'nao_avaliada'.
     """
 
     def test_todos_campos_obrigatorios_presentes_em_erro(self):
@@ -886,9 +898,19 @@ class TestEstruturaRespostaErroCompleta:
         for campo in CAMPOS_OBRIGATORIOS_CONTRATO:
             assert campo in resposta, f"Campo '{campo}' ausente na resposta de erro"
 
-    def test_tipo_resultado_e_erro(self):
+    def test_tipo_resultado_ausente_na_resposta_de_erro(self):
+        """tipo_resultado não faz parte do contrato v1.0."""
         resposta = _montar_resposta_erro("abc", "mensagem de erro")
-        assert resposta["tipo_resultado"] == "erro"
+        assert "tipo_resultado" not in resposta
+
+    def test_chaves_sao_exatamente_os_11_campos_em_erro(self):
+        """Resposta de erro deve ter exatamente os 11 campos do contrato v1.0."""
+        resposta = _montar_resposta_erro("abc", "mensagem de erro")
+        assert set(resposta.keys()) == set(CAMPOS_OBRIGATORIOS_CONTRATO), (
+            f"Chaves divergem do contrato.\n"
+            f"  Esperado : {sorted(CAMPOS_OBRIGATORIOS_CONTRATO)}\n"
+            f"  Recebido : {sorted(resposta.keys())}"
+        )
 
     def test_agente_e_impacto_social(self):
         resposta = _montar_resposta_erro("abc", "mensagem de erro")

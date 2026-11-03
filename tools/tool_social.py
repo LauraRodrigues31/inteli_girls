@@ -340,12 +340,10 @@ def _identificar_riscos(dados: dict, regiao_nome: str) -> list[str]:
 
 def _montar_resposta_erro(regiao_id: str, mensagem_erro: str) -> dict:
     """
-    Monta resposta padronizada de erro conforme contrato (Seção 3.4).
+    Monta resposta padronizada de erro conforme contrato v1.0 (Seção 3.4).
 
     O campo 'confianca' é definido como 'nao_avaliada' para erros fatais.
-    O campo 'tipo_resultado' é definido como 'erro' para distinguir inequivocamente
-    esta resposta de um parecer válido com score baixo, evitando inclusão indevida
-    em rankings.
+    O Guardião identifica erro por: erro != null e confianca == 'nao_avaliada'.
     """
     ids_validos = ", ".join(sorted(_IDS_VALIDOS))
     return {
@@ -354,7 +352,6 @@ def _montar_resposta_erro(regiao_id: str, mensagem_erro: str) -> dict:
         "regiao_nome": None,
         "score": 0,
         "confianca": "nao_avaliada",
-        "tipo_resultado": "erro",
         "indicadores": {},
         "justificativa": (
             f"Região '{regiao_id}' não encontrada na base de dados simulada. "
@@ -440,8 +437,8 @@ def analisar_impacto_social(regiao_id: str) -> dict:
     ]
 
     # Limitações adicionais — apenas quando há campos ausentes
-    # Preserva tipo_resultado="parecer" (contrato do grupo); sinaliza incompletude
-    # via limitacoes e confianca, sem criar novo valor de tipo_resultado.
+    # Sinaliza incompletude via limitacoes e confianca.
+    # O Guardião identifica pareceres parciais por confianca == 'baixa'.
     if campos_ausentes:
         ausentes_str = ", ".join(campos_ausentes)
         criticos_ausentes = [c for c in campos_ausentes if c in _CAMPOS_CRITICOS_SOCIAL]
@@ -463,10 +460,10 @@ def analisar_impacto_social(regiao_id: str) -> dict:
         "regiao_id": resultado["id"],
         "regiao_nome": regiao_nome,
         "score": score,
-        "confianca": confianca,
         # confianca representa APENAS completude dos dados (ver _determinar_confianca).
         # Não representa confiança na recomendação de investimento.
-        "tipo_resultado": "parecer",
+        # Guardião identifica pareceres parciais por confianca == 'baixa'.
+        "confianca": confianca,
         "indicadores": indicadores,
         "justificativa": justificativa,
         "riscos": riscos,
