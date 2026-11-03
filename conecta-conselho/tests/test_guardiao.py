@@ -142,12 +142,12 @@ def test_nova_uniao_atencao_prioritaria_com_pontos_criticos():
     r = _consolidar("nova_uniao")
     assert r["atencao_prioritaria"] is True
     pontos = " ".join(r.get("pontos_criticos", []))
-    # Orcamento score 0 < 20
-    assert "0" in pontos or "rcamento" in pontos, (
+    # Orcamento score 0 < 20 (texto usa "Orçamento" com acento)
+    assert "score 0" in pontos or "amento" in pontos, (
         f"Ponto critico de orcamento esperado em: {r.get('pontos_criticos')}"
     )
     # Engenharia score 11 < 20
-    assert "11" in pontos or "ngenharia" in pontos, (
+    assert "score 11" in pontos or "ngenharia" in pontos, (
         f"Ponto critico de engenharia esperado em: {r.get('pontos_criticos')}"
     )
 
@@ -274,7 +274,8 @@ def test_atencao_orc_menor_20():
     j = _pareceres_sinteticos(scores)
     r = _unwrap(_mod_g.consolidar_pareceres(j))
     assert r["atencao_prioritaria"] is True
-    assert any("rcamento" in p for p in r["pontos_criticos"])
+    # "amento" cobre tanto "Orcamento" (sem acento) quanto "Orçamento" (com acento)
+    assert any("amento" in p for p in r["pontos_criticos"])
 
 
 def test_atencao_confianca_baixa():
@@ -376,6 +377,64 @@ def test_sem_divergencias_scores_equilibrados():
     j = _pareceres_sinteticos(scores)
     r = _unwrap(_mod_g.consolidar_pareceres(j))
     assert r["divergencias"] == []
+
+
+def test_d1_inversa_central():
+    """Central: orcamento=76 > social=30 (diff=46) -> D1 direcao inversa com texto de contrapartidas sociais."""
+    r = _consolidar("central")
+    divs = r.get("divergencias", [])
+    texto = " ".join(divs).lower()
+    assert "contrapartida" in texto or "impacto social" in texto, (
+        f"D1 inversa nao detectada em Central: {divs}"
+    )
+    # Texto da direcao INVERSA deve mencionar "financeiramente atrativa" ou "contrapartidas sociais"
+    assert any(
+        "financeiramente" in d.lower() or "contrapartida" in d.lower()
+        for d in divs
+    ), f"D1 inversa deve citar 'financeiramente' ou 'contrapartida' em Central: {divs}"
+    # Nao deve citar "subsidios" (isso e da direcao original, social > orcamento)
+    assert not any("subsid" in d.lower() for d in divs), (
+        f"D1 inversa nao deve citar subsidios em Central: {divs}"
+    )
+
+
+def test_d1_original_nova_uniao():
+    """Nova Uniao: social=78 > orcamento=0 (diff=78) -> D1 direcao original com parcerias e subsidios."""
+    r = _consolidar("nova_uniao")
+    divs = r.get("divergencias", [])
+    assert any("subsid" in d.lower() or "parceria" in d.lower() for d in divs), (
+        f"D1 original deve citar subsidios ou parcerias em Nova Uniao: {divs}"
+    )
+    assert not any("financeiramente atrativa" in d.lower() for d in divs), (
+        f"D1 original nao deve citar 'financeiramente atrativa' em Nova Uniao: {divs}"
+    )
+
+
+def test_motivos_sem_frases_cortadas():
+    """Nenhum motivo ou ponto_critico deve terminar com 'score <numero>.' (frase cortada)."""
+    import re
+    _padrao_cortado = re.compile(r"score \d+\.$")
+    for rid in ["aurora", "horizonte", "esperanca", "central", "vale_verde", "nova_uniao"]:
+        r = _consolidar(rid)
+        for frase in r.get("motivos", []) + r.get("pontos_criticos", []):
+            assert not _padrao_cortado.search(frase), (
+                f"{rid}: frase parece cortada em '{frase}'"
+            )
+
+
+def test_valores_reais_formato_brasileiro():
+    """Motivos e caminhos de Esperanca devem usar formato R$ brasileiro (ponto como milhar, virgula decimal)."""
+    r = _consolidar("esperanca")
+    textos = " ".join(r.get("motivos", []) + r.get("caminhos", []))
+    # Deve conter R$ com ponto como separador de milhar
+    assert "R$" in textos, f"Formato R$ ausente em motivos/caminhos de Esperanca: {textos}"
+    # Percentual com virgula: ex. 57,5%
+    assert "%" in textos, f"Percentual ausente em motivos/caminhos de Esperanca: {textos}"
+    import re
+    # Formato percentual brasileiro: digito, virgula, digito, %
+    assert re.search(r"\d,\d+%", textos), (
+        f"Percentual no formato brasileiro (X,Y%) ausente em motivos/caminhos: {textos}"
+    )
 
 
 # ---------------------------------------------------------------------------
