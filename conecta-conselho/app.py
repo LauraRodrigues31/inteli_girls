@@ -185,13 +185,14 @@ def _secao_indicadores(regiao_id: str):
 
 def _card_agente(nome_chave: str, parecer: dict):
     """Exibe o card de um agente especialista."""
-    score     = parecer.get("score", 0)
-    confianca = parecer.get("confianca", "—")
-    just      = parecer.get("justificativa", "")
-    riscos    = parecer.get("riscos", [])
-    limitacoes = parecer.get("limitacoes", [])
-    erro      = parecer.get("erro")
-    label     = _NOMES_AGENTES.get(nome_chave, nome_chave)
+    score      = parecer.get("score", 0)
+    confianca  = parecer.get("confianca", "—")
+    just       = parecer.get("justificativa", "")
+    # riscos e limitacoes podem nao estar presentes no resumo do Guardiao real
+    riscos     = parecer.get("riscos") or []
+    limitacoes = parecer.get("limitacoes") or []
+    erro       = parecer.get("erro")
+    label      = _NOMES_AGENTES.get(nome_chave, nome_chave)
 
     with st.container(border=True):
         c1, c2, c3 = st.columns([3, 1, 1])
@@ -209,7 +210,7 @@ def _card_agente(nome_chave: str, parecer: dict):
         if erro:
             st.error(f"Erro: {erro}")
         else:
-            with st.expander("📋 Justificativa, Riscos e Limitações"):
+            with st.expander("📋 Justificativa" + (", Riscos e Limitações" if riscos or limitacoes else "")):
                 st.markdown(f"**Justificativa:** {just}")
                 if riscos:
                     st.markdown("**Riscos:**")
