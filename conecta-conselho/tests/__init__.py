@@ -1,1 +1,0 @@
-# Pacote tests — Conecta Conselho
