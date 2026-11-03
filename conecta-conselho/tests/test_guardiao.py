@@ -393,3 +393,111 @@ def test_score_nova_uniao_30():
     """Nova Uniao deve ter score_consolidado == 30."""
     r = _consolidar("nova_uniao")
     assert r["score_consolidado"] == 30
+
+
+# ---------------------------------------------------------------------------
+# Testes de robustez — entradas malformadas (_normalizar_parecer)
+# ---------------------------------------------------------------------------
+
+def _pareceres_com_um_ruim(mercado_ruim) -> str:
+    """5 pareceres validos exceto mercado que recebe o valor indicado."""
+    pareceres = {}
+    for agente in ["impacto_social", "engenharia", "orcamento", "pontes"]:
+        pareceres[agente] = _parecer_sintetico(60, agente=agente)
+    pareceres["mercado"] = mercado_ruim
+    return json.dumps(pareceres, ensure_ascii=False)
+
+
+def _assert_malformado_escalar(j: str, descricao: str):
+    """Nao lanca excecao, recomendacao escalar, parecer mercado tem erro."""
+    try:
+        r = _unwrap(_mod_g.consolidar_pareceres(j))
+    except Exception as exc:
+        pytest.fail(f"consolidar_pareceres lancou excecao para {descricao}: {exc}")
+    assert r["recomendacao"] == "escalar", (
+        f"{descricao}: esperado 'escalar', obtido '{r['recomendacao']}'"
+    )
+    parecer_mercado = r["pareceres"].get("mercado", {})
+    assert parecer_mercado.get("erro") is not None, (
+        f"{descricao}: parecer mercado deve ter erro preenchido"
+    )
+
+
+def test_robustez_score_ausente():
+    """Parecer sem campo score -> score 0, erro preenchido, recomendacao escalar."""
+    j = _pareceres_com_um_ruim({"confianca": "alta"})
+    _assert_malformado_escalar(j, "score ausente")
+
+
+def test_robustez_parecer_string():
+    """Parecer que e string (nao dict) -> erro, escalar."""
+    j = _pareceres_com_um_ruim("texto")
+    _assert_malformado_escalar(j, "parecer string")
+
+
+def test_robustez_score_null():
+    """Parecer com score null -> score 0, erro, escalar."""
+    j = _pareceres_com_um_ruim({"score": None, "confianca": "alta"})
+    _assert_malformado_escalar(j, "score null")
+
+
+def test_robustez_score_fora_do_intervalo():
+    """Parecer com score 150 -> score 0, erro, escalar."""
+    j = _pareceres_com_um_ruim({"score": 150, "confianca": "alta"})
+    _assert_malformado_escalar(j, "score 150")
+
+
+def test_robustez_lista_raiz():
+    """JSON raiz que e lista -> erro no resultado, nao lanca excecao."""
+    try:
+        r = _unwrap(_mod_g.consolidar_pareceres("[]"))
+    except Exception as exc:
+        pytest.fail(f"consolidar_pareceres lancou excecao para lista raiz: {exc}")
+    assert r["erro"] is not None
+    assert r["recomendacao"] == "escalar"
+
+
+def test_robustez_score_string_numerico():
+    """Score como string numerica '72' deve ser convertido para 72, sem erro."""
+    outros = {
+        agente: _parecer_sintetico(60, agente=agente)
+        for agente in ["impacto_social", "engenharia", "orcamento", "pontes"]
+    }
+    outros["mercado"] = {
+        "score": "72",
+        "confianca": "alta",
+        "justificativa": "Justificativa de teste para verificacao de score string.",
+        "riscos": ["risco teste"],
+        "limitacoes": ["dado simulado"],
+        "simulado": True,
+        "erro": None,
+    }
+    j = json.dumps(outros, ensure_ascii=False)
+    try:
+        r = _unwrap(_mod_g.consolidar_pareceres(j))
+    except Exception as exc:
+        pytest.fail(f"consolidar_pareceres lancou excecao para score string: {exc}")
+    assert r["pareceres"]["mercado"]["score"] == 72, (
+        f"Score string '72' deveria ser convertido para 72, obtido {r['pareceres']['mercado']['score']}"
+    )
+    assert r["pareceres"]["mercado"].get("erro") is None, (
+        "Score string numerico valido nao deve gerar erro"
+    )
+
+
+def test_robustez_chave_extra_ignorada():
+    """Objeto com os 5 pareceres + chave extra 'regiao_id' deve dar mesmo resultado."""
+    scores = {"mercado": 52, "impacto_social": 38, "engenharia": 74, "orcamento": 78, "pontes": 64}
+    pareceres_sem = json.loads(_pareceres_sinteticos(scores))
+    pareceres_com = dict(pareceres_sem)
+    pareceres_com["regiao_id"] = "aurora"  # chave extra que nao e agente
+
+    r_sem = _unwrap(_mod_g.consolidar_pareceres(json.dumps(pareceres_sem)))
+    r_com = _unwrap(_mod_g.consolidar_pareceres(json.dumps(pareceres_com)))
+
+    assert r_sem["score_consolidado"] == r_com["score_consolidado"], (
+        "Chave extra nao deve alterar score_consolidado"
+    )
+    assert r_sem["recomendacao"] == r_com["recomendacao"], (
+        "Chave extra nao deve alterar recomendacao"
+    )
