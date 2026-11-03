@@ -3,7 +3,8 @@ Camada de integração entre a interface Streamlit e os agentes do Conecta Conse
 
 Modo de operação controlado pela variável de ambiente CC_MODO:
   - "local" (padrão): invoca diretamente as funções Python das tools/
-  - "nuvem":          stub — levanta NotImplementedError (a implementar via ADK)
+  - "nuvem":          chama os 5 agentes IBM watsonx Orchestrate em paralelo
+                      via cliente_nuvem.chamar_agente e consolida localmente
 
 AVISO: Todos os dados retornados são SIMULADOS e fictícios.
 """
@@ -12,6 +13,8 @@ from __future__ import annotations
 
 import os
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -126,6 +129,107 @@ def _consolidar_local(regiao_id: str) -> dict:
         if todos_com_erro and primeiro_erro:
             resultado["erro"] = primeiro_erro
 
+    resultado["fonte"] = "local"
+    return resultado
+
+
+# ---------------------------------------------------------------------------
+# Consolidação via nuvem — 5 agentes IBM watsonx Orchestrate em paralelo
+# ---------------------------------------------------------------------------
+
+# Mapa de chave de parecer para variável de ambiente do agent_id
+_AGENTE_ENV = {
+    "mercado":        "CC_AGENT_ID_MERCADO",
+    "impacto_social": "CC_AGENT_ID_SOCIAL",
+    "engenharia":     "CC_AGENT_ID_ENGENHARIA",
+    "orcamento":      "CC_AGENT_ID_ORCAMENTO",
+    "pontes":         "CC_AGENT_ID_PONTES",
+}
+
+
+def _verificar_credenciais_nuvem() -> tuple[bool, str]:
+    """
+    Verifica se todas as credenciais e IDs necessários estão no ambiente.
+    Retorna (ok: bool, mensagem_de_aviso: str).
+    Nunca imprime tokens, keys nem IDs.
+    """
+    ids_ausentes = [
+        chave_env
+        for chave_env in _AGENTE_ENV.values()
+        if not os.environ.get(chave_env, "").strip()
+    ]
+    if ids_ausentes:
+        return False, f"IDs de agente ausentes no .env: {', '.join(ids_ausentes)}"
+    return True, ""
+
+
+def _consolidar_nuvem(regiao_id: str) -> dict:
+    """
+    Chama os 5 agentes IBM watsonx Orchestrate em paralelo via ThreadPoolExecutor.
+    De cada resposta extrai choices[0].message.content e passa para extrair_json.
+    Se um agente falhar, monta parecer com "erro" preenchido.
+    Consolida com consolidar_pareceres e devolve o mesmo formato do modo local.
+    """
+    import importlib as _imp
+    cliente_nuvem = _imp.import_module("cliente_nuvem")
+
+    t_inicio = time.monotonic()
+
+    def _chamar_agente(chave: str) -> tuple[str, dict]:
+        """Chama um agente na nuvem e retorna (chave, parecer_dict)."""
+        env_var = _AGENTE_ENV[chave]
+        agent_id = os.environ.get(env_var, "").strip()
+        if not agent_id:
+            return chave, {
+                "score": 0,
+                "confianca": "nao_avaliada",
+                "justificativa": "",
+                "riscos": [],
+                "erro": f"ID do agente '{chave}' não configurado (variável {env_var} ausente).",
+            }
+        try:
+            resposta = cliente_nuvem.chamar_agente(
+                agent_id, f"Analise a região {regiao_id}"
+            )
+            conteudo = resposta["choices"][0]["message"]["content"]
+            parecer = cliente_nuvem.extrair_json(conteudo)
+            return chave, parecer
+        except Exception as exc:  # noqa: BLE001
+            return chave, {
+                "score": 0,
+                "confianca": "nao_avaliada",
+                "justificativa": "",
+                "riscos": [],
+                "erro": f"Falha ao chamar agente '{chave}': {exc}",
+            }
+
+    pareceres_brutos: dict = {}
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futuros = {
+            executor.submit(_chamar_agente, chave): chave
+            for chave in _AGENTE_ENV
+        }
+        for futuro in as_completed(futuros):
+            chave, parecer = futuro.result()
+            pareceres_brutos[chave] = parecer
+
+    # Consolida localmente — mesma lógica do modo local
+    resultado = _desempacotar(
+        consolidar_pareceres(_json.dumps(pareceres_brutos, ensure_ascii=False))
+    )
+
+    # Preenche regiao_id e regiao_nome se o Guardião não conseguiu extrair
+    if not resultado.get("regiao_id"):
+        resultado["regiao_id"] = regiao_id
+    if not resultado.get("regiao_nome"):
+        for p in pareceres_brutos.values():
+            if p.get("regiao_nome"):
+                resultado["regiao_nome"] = p["regiao_nome"]
+                break
+
+    t_total = round(time.monotonic() - t_inicio, 2)
+    resultado["fonte"] = "nuvem"
+    resultado["tempo_analise_segundos"] = t_total
     return resultado
 
 
@@ -133,28 +237,36 @@ def _consolidar_local(regiao_id: str) -> dict:
 # Ponto de entrada público
 # ---------------------------------------------------------------------------
 
-def chamar_guardiao(regiao_id: str) -> dict:
+def chamar_guardiao(regiao_id: str, *, fonte: str | None = None) -> dict:
     """
     Camada de integração com o Agente Guardião.
 
-    Modo "local" (padrão, CC_MODO != "nuvem"):
-        Chama diretamente os 5 agentes Python e consolida conforme Seção 11.
+    Modo "local" (padrão, CC_MODO != "nuvem" e fonte != "nuvem"):
+        Chama diretamente os 5 agentes Python e consolida com tool_guardiao.
 
-    Modo "nuvem" (CC_MODO=nuvem):
-        Stub — NotImplementedError (integração IBM Cloud a implementar).
+    Modo "nuvem" (CC_MODO=nuvem ou fonte="nuvem"):
+        Chama os 5 agentes IBM watsonx Orchestrate em paralelo via
+        cliente_nuvem.chamar_agente e consolida localmente.
 
     Args:
         regiao_id: Identificador da região (ex: 'aurora', 'central').
+        fonte:     Sobrescreve CC_MODO quando fornecido ('local' | 'nuvem').
 
     Returns:
-        Dicionário com pareceres dos 5 agentes e recomendação do Guardião.
+        Dicionário com pareceres dos 5 agentes e recomendação do Guardião,
+        incluindo os campos "fonte" e "tempo_analise_segundos".
     """
-    modo = os.environ.get("CC_MODO", "local").strip().lower()
+    modo_env = os.environ.get("CC_MODO", "local").strip().lower()
+    modo_efetivo = fonte if fonte in ("local", "nuvem") else modo_env
 
-    if modo == "nuvem":
-        raise NotImplementedError(
-            "Modo 'nuvem' não implementado. "
-            "Substituir pelo cliente ibm_watsonx_orchestrate quando disponível."
-        )
+    if modo_efetivo == "nuvem":
+        t_inicio = time.monotonic()
+        resultado = _consolidar_nuvem(regiao_id)
+        if "tempo_analise_segundos" not in resultado:
+            resultado["tempo_analise_segundos"] = round(time.monotonic() - t_inicio, 2)
+        return resultado
 
-    return _consolidar_local(regiao_id)
+    t_inicio = time.monotonic()
+    resultado = _consolidar_local(regiao_id)
+    resultado["tempo_analise_segundos"] = round(time.monotonic() - t_inicio, 2)
+    return resultado

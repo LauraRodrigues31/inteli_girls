@@ -17,6 +17,7 @@ Nenhuma API externa é chamada; nenhum mapa é exibido.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -33,7 +34,7 @@ for _p in [str(_ROOT), str(_CC_DIR)]:
 import streamlit as st
 
 from tools.consultar_regiao import listar_regioes, consultar_regiao  # type: ignore[import]
-from integracao import chamar_guardiao
+from integracao import chamar_guardiao, _verificar_credenciais_nuvem
 
 # ---------------------------------------------------------------------------
 # Constantes
@@ -45,14 +46,12 @@ _LABELS_RECOMENDACAO = {
     "investir_agora":  "✅ Investir Agora",
     "realizar_piloto": "🔬 Realizar Piloto",
     "aguardar":        "⏳ Aguardar",
-    "escalar":         "👤 Escalar a Humano",
 }
 
 _CORES_RECOMENDACAO = {
     "investir_agora":  "green",
     "realizar_piloto": "blue",
     "aguardar":        "orange",
-    "escalar":         "red",
 }
 
 _NOMES_AGENTES = {
@@ -109,6 +108,8 @@ def _formatar_valor(v) -> str:
 def _inicializar_estado():
     if "historico" not in st.session_state:
         st.session_state.historico = []   # lista de dicts do Guardião
+    if "fonte_pareceres" not in st.session_state:
+        st.session_state.fonte_pareceres = "local"
 
 
 def _registrar_historico(resultado_guardiao: dict):
@@ -124,11 +125,48 @@ def _registrar_historico(resultado_guardiao: dict):
 
 
 def _ranking() -> list[dict]:
+    """Retorna ranking excluindo análises incompletas (score null)."""
     return sorted(
-        st.session_state.historico,
+        [
+            item for item in st.session_state.historico
+            if item.get("score_consolidado") is not None
+        ],
         key=lambda x: x.get("score_consolidado", 0),
         reverse=True,
     )
+
+
+# ---------------------------------------------------------------------------
+# Seletor de fonte na barra lateral
+# ---------------------------------------------------------------------------
+
+
+def _seletor_fonte() -> str:
+    """
+    Renderiza o seletor de fonte na barra lateral.
+    Se faltarem credenciais ou IDs, exibe aviso e força 'local'.
+    Retorna 'local' ou 'nuvem'.
+    """
+    with st.sidebar:
+        st.header("⚙️ Configurações")
+        opcao = st.radio(
+            "Fonte dos pareceres:",
+            options=["Local", "IBM watsonx Orchestrate"],
+            index=0,
+            key="seletor_fonte",
+        )
+        fonte_escolhida = "nuvem" if opcao == "IBM watsonx Orchestrate" else "local"
+
+        if fonte_escolhida == "nuvem":
+            ok, aviso = _verificar_credenciais_nuvem()
+            if not ok:
+                st.warning(
+                    f"⚠️ Credenciais insuficientes para modo nuvem. "
+                    f"Usando fonte local.\n\n{aviso}"
+                )
+                return "local"
+
+        return fonte_escolhida
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +265,8 @@ def _secao_resultado(resultado: dict):
     if not resultado:
         return
 
+    status = resultado.get("status", "concluida")
+
     st.divider()
     st.subheader("🤖 Análise dos Agentes Especialistas")
     st.caption(_AVISO_SIMULADO)
@@ -239,8 +279,30 @@ def _secao_resultado(resultado: dict):
     st.divider()
     st.subheader("🛡️ Recomendação do Guardião")
 
+    # --- Análise incompleta ---
+    if status == "analise_incompleta":
+        st.error("⚠️ Análise incompleta — não é possível emitir recomendação.")
+        agentes_com_falha = resultado.get("agentes_com_falha", [])
+        if agentes_com_falha:
+            st.markdown("**Agentes com falha:**")
+            for af in agentes_com_falha:
+                nome = af.get("agente", "—")
+                motivo = af.get("motivo", "erro desconhecido")
+                st.markdown(f"- **{_NOMES_AGENTES.get(nome, nome)}**: {motivo}")
+        # Download mesmo em incompleto
+        st.divider()
+        json_bytes = json.dumps(resultado, ensure_ascii=False, indent=2).encode("utf-8")
+        st.download_button(
+            label="⬇️ Baixar relatório JSON (trilha de auditoria)",
+            data=json_bytes,
+            file_name=f"relatorio_{resultado.get('regiao_id', 'regiao')}.json",
+            mime="application/json",
+        )
+        return
+
+    # --- Análise concluída ---
     score_cons = resultado.get("score_consolidado", 0)
-    recomendacao = resultado.get("recomendacao", "escalar")
+    recomendacao = resultado.get("recomendacao", "aguardar")
     label_rec = _LABELS_RECOMENDACAO.get(recomendacao, recomendacao)
     cor_rec = _CORES_RECOMENDACAO.get(recomendacao, "gray")
 
@@ -250,37 +312,63 @@ def _secao_resultado(resultado: dict):
     with col_rec:
         st.markdown(f"### :{cor_rec}[{label_rec}]")
 
+    # --- Atenção prioritária ---
+    if resultado.get("atencao_prioritaria"):
+        pontos_criticos = resultado.get("pontos_criticos", [])
+        aviso_linhas = ["🚨 **Atenção Prioritária** — esta região requer cuidado especial."]
+        if pontos_criticos:
+            aviso_linhas.append("\n**Pontos críticos identificados:**")
+            for ponto in pontos_criticos:
+                aviso_linhas.append(f"- {ponto}")
+        st.error("\n".join(aviso_linhas))
+
+    # --- Justificativa consolidada ---
     just_cons = resultado.get("justificativa_consolidada", "")
     if just_cons:
         st.info(just_cons)
 
+    # --- Seções específicas de "aguardar" ---
+    if recomendacao == "aguardar":
+        motivos = resultado.get("motivos", [])
+        caminhos = resultado.get("caminhos", [])
+        if motivos:
+            with st.expander("🔍 Por que aguardar", expanded=True):
+                for m in motivos:
+                    st.markdown(f"- {m}")
+        if caminhos:
+            with st.expander("🛤️ Caminhos para viabilizar", expanded=True):
+                for c in caminhos:
+                    st.markdown(f"- {c}")
+
+    # --- Divergências ---
     divergencias = resultado.get("divergencias", [])
     if divergencias:
         with st.expander(f"⚡ Divergências identificadas ({len(divergencias)})"):
             for d in divergencias:
                 st.warning(d)
 
+    # --- Principais riscos ---
     riscos_princ = resultado.get("principais_riscos", [])
-    oportunidades = resultado.get("principais_oportunidades", [])
+    if riscos_princ:
+        st.markdown("**⚠️ Principais Riscos**")
+        for r in riscos_princ:
+            st.markdown(f"- {r}")
 
-    if riscos_princ or oportunidades:
-        col_r, col_o = st.columns(2)
-        with col_r:
-            if riscos_princ:
-                st.markdown("**⚠️ Principais Riscos**")
-                for r in riscos_princ:
-                    st.markdown(f"- {r}")
-        with col_o:
-            if oportunidades:
-                st.markdown("**💡 Oportunidades**")
-                for o in oportunidades:
-                    st.markdown(f"- {o}")
-
+    # --- Limitações ---
     limitacoes_g = resultado.get("limitacoes", [])
     if limitacoes_g:
         with st.expander("📌 Limitações da análise"):
             for lim in limitacoes_g:
                 st.caption(f"— {lim}")
+
+    # --- Fonte e tempo ---
+    fonte = resultado.get("fonte", "local")
+    tempo = resultado.get("tempo_analise_segundos")
+    fonte_label = "☁️ IBM watsonx Orchestrate" if fonte == "nuvem" else "💻 Local"
+    if tempo is not None:
+        st.caption(f"Fonte: {fonte_label} | Tempo de análise: {tempo}s")
+    else:
+        st.caption(f"Fonte: {fonte_label}")
 
     # Download do relatório JSON (trilha de auditoria)
     st.divider()
@@ -304,26 +392,37 @@ def _secao_historico():
 
     st.subheader("🏆 Ranking desta Sessão")
     st.caption(_AVISO_SIMULADO)
+    st.caption("Regiões com análise incompleta não entram no ranking.")
 
-    dados_tabela = []
-    for pos, item in enumerate(ranking, start=1):
-        rec = item.get("recomendacao", "—")
-        dados_tabela.append({
-            "Rank": pos,
-            "Região": item.get("regiao_nome", item.get("regiao_id", "—")),
-            "Score": item.get("score_consolidado", 0),
-            "Recomendação": _LABELS_RECOMENDACAO.get(rec, rec),
-        })
-
-    st.dataframe(dados_tabela, use_container_width=True, hide_index=True)
+    if ranking:
+        dados_tabela = []
+        for pos, item in enumerate(ranking, start=1):
+            rec = item.get("recomendacao", "—")
+            dados_tabela.append({
+                "Rank": pos,
+                "Região": item.get("regiao_nome", item.get("regiao_id", "—")),
+                "Score": item.get("score_consolidado", 0),
+                "Recomendação": _LABELS_RECOMENDACAO.get(rec, rec),
+            })
+        st.dataframe(dados_tabela, use_container_width=True, hide_index=True)
+    else:
+        st.info("Nenhuma análise concluída com recomendação disponível no ranking.")
 
     st.subheader("📋 Histórico Detalhado")
     for item in historico:
         regiao_nome = item.get("regiao_nome", item.get("regiao_id", "—"))
-        score = item.get("score_consolidado", 0)
-        rec   = item.get("recomendacao", "—")
-        label = _LABELS_RECOMENDACAO.get(rec, rec)
-        with st.expander(f"{regiao_nome} — Score {score} — {label}"):
+        score = item.get("score_consolidado")
+        rec   = item.get("recomendacao")
+        status = item.get("status", "concluida")
+
+        if status == "analise_incompleta":
+            expander_label = f"{regiao_nome} — ⚠️ Análise Incompleta"
+        else:
+            score_str = f"Score {score}" if score is not None else "—"
+            label = _LABELS_RECOMENDACAO.get(rec, rec) if rec else "—"
+            expander_label = f"{regiao_nome} — {score_str} — {label}"
+
+        with st.expander(expander_label):
             json_bytes = json.dumps(item, ensure_ascii=False, indent=2).encode("utf-8")
             st.download_button(
                 label=f"⬇️ Baixar relatório {regiao_nome}",
@@ -349,6 +448,9 @@ def main():
 
     _inicializar_estado()
 
+    # Seletor de fonte na barra lateral
+    fonte = _seletor_fonte()
+
     # Cabeçalho
     st.title("🌐 Conecta Conselho")
     st.caption("Sistema de apoio a decisões de expansão de conectividade | Trilha 3 · IBM SkillsBuild")
@@ -364,10 +466,12 @@ def main():
         if executar:
             with st.spinner(f"Executando o Conselho para {regiao_id}..."):
                 try:
-                    resultado = chamar_guardiao(regiao_id)
+                    resultado = chamar_guardiao(regiao_id, fonte=fonte)
                     st.session_state[f"resultado_{regiao_id}"] = resultado
                     _registrar_historico(resultado)
-                    if resultado.get("erro"):
+                    if resultado.get("status") == "analise_incompleta":
+                        st.warning("Análise incompleta — verifique os agentes com falha.")
+                    elif resultado.get("erro"):
                         st.error(f"Erro ao analisar região: {resultado['erro']}")
                     else:
                         st.success(f"Análise concluída para {resultado.get('regiao_nome', regiao_id)}!")
