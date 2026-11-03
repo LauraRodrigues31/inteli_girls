@@ -79,8 +79,8 @@ importável como `tools.tool_social` a partir do diretório raiz do projeto.
 ## 3. Checklist antes do `orchestrate tool import`
 
 - [ ] Confirmar que `consultar_regiao.py` e `regioes.json` estarão acessíveis no ambiente de execução
-- [ ] Confirmar que o modelo `watsonx/meta-llama/llama-3-2-90b-vision-instruct` está disponível no workspace Trial
-      (alternativa comum: `watsonx/meta-llama/llama-3-1-70b-instruct`)
+- [ ] Confirmar que o modelo `groq/openai/gpt-oss-120b` está disponível no workspace Trial
+      (modelo usado por todos os agentes do Conecta Conselho)
 - [ ] Executar `python -m pytest conecta-conselho/tests/test_agente_social.py -q` localmente antes do import
 - [ ] Verificar que `_ADK_DISPONIVEL` é `True` no ambiente de execução (pode ser logado no `print` de info)
 - [ ] Não publicar sem alinhamento com o responsável pelo Guardião — o Guardião consome o output deste agente
