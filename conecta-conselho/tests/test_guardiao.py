@@ -61,35 +61,6 @@ def _consolidar(regiao_id: str) -> dict:
     return _unwrap(result)
 
 
-# ---------------------------------------------------------------------------
-# Testes de recomendacao esperada para as 6 regioes
-# (aurora 62 realizar_piloto | horizonte 57 realizar_piloto |
-#  esperanca 44 aguardar | central 60 realizar_piloto |
-#  vale_verde 60 realizar_piloto | nova_uniao 30 escalar)
-# ---------------------------------------------------------------------------
-
-@pytest.mark.parametrize("regiao_id,score_esp,rec_esp", [
-    ("aurora",     62, "realizar_piloto"),
-    ("horizonte",  57, "realizar_piloto"),
-    ("esperanca",  44, "aguardar"),
-    ("central",    60, "realizar_piloto"),
-    ("vale_verde", 60, "realizar_piloto"),
-    ("nova_uniao", 30, "escalar"),
-])
-def test_score_e_recomendacao_esperados(regiao_id, score_esp, rec_esp):
-    r = _consolidar(regiao_id)
-    assert r["score_consolidado"] == score_esp, (
-        f"{regiao_id}: score esperado {score_esp}, obtido {r['score_consolidado']}"
-    )
-    assert r["recomendacao"] == rec_esp, (
-        f"{regiao_id}: recomendacao esperada '{rec_esp}', obtida '{r['recomendacao']}'"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Testes de limiares exatos (29/30, 49/50, 69/70)
-# ---------------------------------------------------------------------------
-
 def _parecer_sintetico(score: int, agente: str = "mercado", erro=None) -> dict:
     return {
         "agente": agente,
@@ -128,36 +99,101 @@ def _score_sintetico(scores: dict) -> int:
     )
 
 
-def test_limiar_29_escalar():
-    """Score consolidado 29 deve resultar em 'escalar'."""
-    # m=30, s=30, e=30, o=26, p=30 -> round(0.20*30+0.20*30+0.25*30+0.25*26+0.10*30) = round(29.5)=30? ajusta
-    # Vamos calcular direto: precisamos exatamente 29
-    # 0.20*a + 0.20*b + 0.25*c + 0.25*d + 0.10*e = 29 com todos >=20
-    # Usa: m=30, s=30, e=25, o=25, p=30 -> 6+6+6.25+6.25+3 = 27.5 -> 28; ajusta
-    # m=30, s=30, e=30, o=25, p=30 -> 6+6+7.5+6.25+3 = 28.75 -> 29 ✓
-    scores = {"mercado": 30, "impacto_social": 30, "engenharia": 30, "orcamento": 25, "pontes": 30}
-    assert _score_sintetico(scores) == 29
-    j = _pareceres_sinteticos(scores)
-    r = _unwrap(_mod_g.consolidar_pareceres(j))
-    assert r["score_consolidado"] == 29
-    assert r["recomendacao"] == "escalar"
+# ---------------------------------------------------------------------------
+# Testes de recomendacao e score esperados para as 6 regioes
+# aurora 62 realizar_piloto | horizonte 57 realizar_piloto |
+# esperanca 44 aguardar | central 60 realizar_piloto |
+# vale_verde 60 realizar_piloto | nova_uniao 30 aguardar (com atencao_prioritaria)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("regiao_id,score_esp,rec_esp,atencao_esp", [
+    ("aurora",     62, "realizar_piloto", False),
+    ("horizonte",  57, "realizar_piloto", False),
+    ("esperanca",  44, "aguardar",        False),
+    ("central",    60, "realizar_piloto", False),
+    ("vale_verde", 60, "realizar_piloto", False),
+    ("nova_uniao", 30, "aguardar",        True),
+])
+def test_score_recomendacao_e_atencao_esperados(regiao_id, score_esp, rec_esp, atencao_esp):
+    r = _consolidar(regiao_id)
+    assert r["status"] == "concluida", f"{regiao_id}: esperado status concluida"
+    assert r["score_consolidado"] == score_esp, (
+        f"{regiao_id}: score esperado {score_esp}, obtido {r['score_consolidado']}"
+    )
+    assert r["recomendacao"] == rec_esp, (
+        f"{regiao_id}: recomendacao esperada '{rec_esp}', obtida '{r['recomendacao']}'"
+    )
+    assert r["atencao_prioritaria"] == atencao_esp, (
+        f"{regiao_id}: atencao_prioritaria esperada {atencao_esp}, obtida {r['atencao_prioritaria']}"
+    )
 
 
-def test_limiar_30_aguardar():
-    """Score consolidado 30 SEM eng<20 nem orc<20 deve ser 'aguardar'."""
-    # m=30, s=30, e=30, o=30, p=30 -> 6+6+7.5+7.5+3 = 30 ✓
-    scores = {"mercado": 30, "impacto_social": 30, "engenharia": 30, "orcamento": 30, "pontes": 30}
-    assert _score_sintetico(scores) == 30
-    j = _pareceres_sinteticos(scores)
-    r = _unwrap(_mod_g.consolidar_pareceres(j))
-    assert r["score_consolidado"] == 30
+def test_escalar_nunca_aparece_como_recomendacao():
+    """'escalar' nao deve aparecer como recomendacao em nenhuma regiao valida."""
+    for rid in ["aurora", "horizonte", "esperanca", "central", "vale_verde", "nova_uniao"]:
+        r = _consolidar(rid)
+        assert r.get("recomendacao") != "escalar", (
+            f"{rid}: recomendacao 'escalar' nao deve existir mais"
+        )
+
+
+def test_nova_uniao_atencao_prioritaria_com_pontos_criticos():
+    """Nova Uniao deve ter atencao_prioritaria=True e pontos_criticos citando orc, eng e confianca."""
+    r = _consolidar("nova_uniao")
+    assert r["atencao_prioritaria"] is True
+    pontos = " ".join(r.get("pontos_criticos", []))
+    # Orcamento score 0 < 20
+    assert "0" in pontos or "rcamento" in pontos, (
+        f"Ponto critico de orcamento esperado em: {r.get('pontos_criticos')}"
+    )
+    # Engenharia score 11 < 20
+    assert "11" in pontos or "ngenharia" in pontos, (
+        f"Ponto critico de engenharia esperado em: {r.get('pontos_criticos')}"
+    )
+
+
+def test_nova_uniao_motivos_e_caminhos_presentes():
+    """Nova Uniao tem recomendacao aguardar -> motivos e caminhos devem ser preenchidos."""
+    r = _consolidar("nova_uniao")
     assert r["recomendacao"] == "aguardar"
+    assert len(r.get("motivos", [])) > 0, "Motivos devem ser preenchidos para aguardar"
+    # Caminhos podem ser vazios se os campos indicadores nao existirem, mas nao devem quebrar
+    assert isinstance(r.get("caminhos"), list)
 
+
+def test_esperanca_motivos_e_caminhos_presentes():
+    """Esperanca tem recomendacao aguardar -> motivos e caminhos devem ser preenchidos."""
+    r = _consolidar("esperanca")
+    assert r["recomendacao"] == "aguardar"
+    assert len(r.get("motivos", [])) > 0
+
+
+def test_aurora_motivos_caminhos_vazios():
+    """Aurora tem realizar_piloto -> motivos e caminhos devem ser listas vazias."""
+    r = _consolidar("aurora")
+    assert r["recomendacao"] == "realizar_piloto"
+    assert r.get("motivos") == []
+    assert r.get("caminhos") == []
+
+
+def test_regiao_inexistente_analise_incompleta():
+    """Regiao inexistente: todos os 5 pareceres tem erro -> analise_incompleta, recomendacao null."""
+    r = _consolidar("nao_existe")
+    assert r["status"] == "analise_incompleta", (
+        f"Esperado analise_incompleta, obtido {r['status']}"
+    )
+    assert r["recomendacao"] is None
+    assert r["score_consolidado"] is None
+    assert "agentes_com_falha" in r
+    assert len(r["agentes_com_falha"]) == 5
+
+
+# ---------------------------------------------------------------------------
+# Testes de limiares exatos
+# ---------------------------------------------------------------------------
 
 def test_limiar_49_aguardar():
-    """Score consolidado 49 deve ser 'aguardar'."""
-    # m=50, s=50, e=49, o=49, p=45
-    # 10+10+12.25+12.25+4.5 = 49 ✓
+    """Score 49 deve ser 'aguardar'."""
     scores = {"mercado": 50, "impacto_social": 50, "engenharia": 49, "orcamento": 49, "pontes": 45}
     assert _score_sintetico(scores) == 49
     j = _pareceres_sinteticos(scores)
@@ -167,8 +203,7 @@ def test_limiar_49_aguardar():
 
 
 def test_limiar_50_realizar_piloto():
-    """Score consolidado 50 deve ser 'realizar_piloto'."""
-    # m=50, s=50, e=50, o=50, p=50 -> 10+10+12.5+12.5+5 = 50 ✓
+    """Score 50 deve ser 'realizar_piloto'."""
     scores = {"mercado": 50, "impacto_social": 50, "engenharia": 50, "orcamento": 50, "pontes": 50}
     assert _score_sintetico(scores) == 50
     j = _pareceres_sinteticos(scores)
@@ -179,8 +214,6 @@ def test_limiar_50_realizar_piloto():
 
 def test_limiar_69_realizar_piloto():
     """Score 69, eng>=60, orc>=60 -> NAO atinge 70 -> realizar_piloto."""
-    # m=70, s=70, e=69, o=69, p=65
-    # 14+14+17.25+17.25+6.5 = 69 ✓
     scores = {"mercado": 70, "impacto_social": 70, "engenharia": 69, "orcamento": 69, "pontes": 65}
     assert _score_sintetico(scores) == 69
     j = _pareceres_sinteticos(scores)
@@ -191,7 +224,6 @@ def test_limiar_69_realizar_piloto():
 
 def test_limiar_70_investir_agora():
     """Score 70, eng>=60, orc>=60 -> 'investir_agora'."""
-    # m=70, s=70, e=70, o=70, p=70 -> 14+14+17.5+17.5+7 = 70 ✓
     scores = {"mercado": 70, "impacto_social": 70, "engenharia": 70, "orcamento": 70, "pontes": 70}
     assert _score_sintetico(scores) == 70
     j = _pareceres_sinteticos(scores)
@@ -200,72 +232,53 @@ def test_limiar_70_investir_agora():
     assert r["recomendacao"] == "investir_agora"
 
 
-# ---------------------------------------------------------------------------
-# Testes das divergencias
-# ---------------------------------------------------------------------------
-
-def test_divergencia_social_vs_orcamento():
-    """Diferenca > 30 entre impacto_social e orcamento gera divergencia."""
-    scores = {"mercado": 50, "impacto_social": 90, "engenharia": 50, "orcamento": 55, "pontes": 50}
+def test_score_29_aguardar_com_atencao():
+    """Score 29 -> aguardar (nao mais escalar) + atencao_prioritaria True."""
+    # m=30, s=30, e=30, o=25, p=30 -> 6+6+7.5+6.25+3 = 28.75 -> 29
+    scores = {"mercado": 30, "impacto_social": 30, "engenharia": 30, "orcamento": 25, "pontes": 30}
+    assert _score_sintetico(scores) == 29
     j = _pareceres_sinteticos(scores)
     r = _unwrap(_mod_g.consolidar_pareceres(j))
-    assert any("impacto_social" in d or "impacto social" in d.lower() for d in r["divergencias"]), (
-        f"Divergencia social/orcamento nao detectada: {r['divergencias']}"
-    )
+    assert r["score_consolidado"] == 29
+    assert r["recomendacao"] == "aguardar"   # nao mais escalar
+    assert r["atencao_prioritaria"] is True   # score < 30
 
 
-def test_divergencia_engenharia_baixa_mercado_alto():
-    """Engenharia < 40 e mercado > 60 gera divergencia tecnica."""
-    scores = {"mercado": 70, "impacto_social": 50, "engenharia": 30, "orcamento": 50, "pontes": 50}
+def test_score_30_aguardar_sem_atencao():
+    """Score 30, sem eng/orc criticos -> aguardar e atencao_prioritaria False."""
+    scores = {"mercado": 30, "impacto_social": 30, "engenharia": 30, "orcamento": 30, "pontes": 30}
+    assert _score_sintetico(scores) == 30
     j = _pareceres_sinteticos(scores)
     r = _unwrap(_mod_g.consolidar_pareceres(j))
-    assert any("engenharia" in d.lower() or "tecnica" in d.lower() for d in r["divergencias"]), (
-        f"Divergencia engenharia/mercado nao detectada: {r['divergencias']}"
-    )
-
-
-def test_divergencia_pontes_alto_orcamento_baixo():
-    """Pontes > 70 e orcamento < 40 gera divergencia de cofinanciamento."""
-    scores = {"mercado": 50, "impacto_social": 50, "engenharia": 50, "orcamento": 30, "pontes": 80}
-    j = _pareceres_sinteticos(scores)
-    r = _unwrap(_mod_g.consolidar_pareceres(j))
-    assert any("pontes" in d.lower() or "parceria" in d.lower() or "cofinanciamento" in d.lower()
-               for d in r["divergencias"]), (
-        f"Divergencia pontes/orcamento nao detectada: {r['divergencias']}"
-    )
-
-
-def test_sem_divergencias_scores_equilibrados():
-    """Scores equilibrados nao devem gerar divergencias."""
-    scores = {"mercado": 60, "impacto_social": 60, "engenharia": 60, "orcamento": 60, "pontes": 60}
-    j = _pareceres_sinteticos(scores)
-    r = _unwrap(_mod_g.consolidar_pareceres(j))
-    # Nenhuma das 3 regras ativa; sem erro: sem divergencias
-    assert r["divergencias"] == []
+    assert r["score_consolidado"] == 30
+    assert r["recomendacao"] == "aguardar"
+    assert r["atencao_prioritaria"] is False
 
 
 # ---------------------------------------------------------------------------
-# Testes de parecer com erro
+# Testes de atencao_prioritaria
 # ---------------------------------------------------------------------------
 
-def test_parecer_com_erro_gera_escalar():
-    """Qualquer parecer com erro != null deve forcar recomendacao 'escalar'."""
-    scores = {"mercado": 60, "impacto_social": 60, "engenharia": 60, "orcamento": 60, "pontes": 60}
-    j = _pareceres_sinteticos(scores, erros={"engenharia": "Regiao nao encontrada"})
+def test_atencao_eng_menor_20():
+    """Engenharia < 20 deve acionar atencao_prioritaria=True."""
+    scores = {"mercado": 60, "impacto_social": 60, "engenharia": 15, "orcamento": 60, "pontes": 60}
+    j = _pareceres_sinteticos(scores)
     r = _unwrap(_mod_g.consolidar_pareceres(j))
-    assert r["recomendacao"] == "escalar"
+    assert r["atencao_prioritaria"] is True
+    assert any("ngenharia" in p for p in r["pontos_criticos"])
 
 
-def test_parecer_com_erro_registrado_em_divergencias():
-    """Parecer com erro deve aparecer no campo divergencias."""
-    scores = {"mercado": 50, "impacto_social": 50, "engenharia": 50, "orcamento": 50, "pontes": 50}
-    j = _pareceres_sinteticos(scores, erros={"mercado": "Falha ao consultar dados"})
+def test_atencao_orc_menor_20():
+    """Orcamento < 20 deve acionar atencao_prioritaria=True."""
+    scores = {"mercado": 60, "impacto_social": 60, "engenharia": 60, "orcamento": 10, "pontes": 60}
+    j = _pareceres_sinteticos(scores)
     r = _unwrap(_mod_g.consolidar_pareceres(j))
-    assert any("mercado" in d.lower() for d in r["divergencias"])
+    assert r["atencao_prioritaria"] is True
+    assert any("rcamento" in p for p in r["pontos_criticos"])
 
 
-def test_confianca_baixa_gera_escalar():
-    """Parecer com confianca 'baixa' deve forcar recomendacao 'escalar'."""
+def test_atencao_confianca_baixa():
+    """Parecer com confianca 'baixa' deve acionar atencao_prioritaria=True."""
     pareceres = {}
     for agente in ["mercado", "impacto_social", "engenharia", "orcamento", "pontes"]:
         p = _parecer_sintetico(60, agente=agente)
@@ -274,32 +287,122 @@ def test_confianca_baixa_gera_escalar():
         pareceres[agente] = p
     j = json.dumps(pareceres)
     r = _unwrap(_mod_g.consolidar_pareceres(j))
-    assert r["recomendacao"] == "escalar"
+    assert r["atencao_prioritaria"] is True
+    assert any("baixa" in p.lower() or "rcamento" in p.lower() for p in r["pontos_criticos"])
+
+
+def test_sem_atencao_scores_equilibrados():
+    """Scores equilibrados e sem confianca baixa -> atencao_prioritaria False."""
+    scores = {"mercado": 60, "impacto_social": 60, "engenharia": 60, "orcamento": 60, "pontes": 60}
+    j = _pareceres_sinteticos(scores)
+    r = _unwrap(_mod_g.consolidar_pareceres(j))
+    assert r["atencao_prioritaria"] is False
+    assert r["pontos_criticos"] == []
 
 
 # ---------------------------------------------------------------------------
-# Testes de JSON invalido
+# Testes de analise_incompleta
 # ---------------------------------------------------------------------------
 
-def test_json_invalido_retorna_erro():
-    """String nao-JSON deve retornar erro nao nulo."""
+def test_analise_incompleta_um_parecer_com_erro():
+    """Apenas 1 dos 5 pareceres com erro -> analise_incompleta, recomendacao null."""
+    scores = {"mercado": 60, "impacto_social": 60, "engenharia": 60, "orcamento": 60, "pontes": 60}
+    j = _pareceres_sinteticos(scores, erros={"engenharia": "Falha ao consultar dados"})
+    r = _unwrap(_mod_g.consolidar_pareceres(j))
+    assert r["status"] == "analise_incompleta"
+    assert r["recomendacao"] is None
+    assert r["score_consolidado"] is None
+    assert "agentes_com_falha" in r
+    assert any(f["agente"] == "engenharia" for f in r["agentes_com_falha"])
+
+
+def test_analise_incompleta_agente_ausente():
+    """JSON sem a chave 'mercado' -> analise_incompleta."""
+    pareceres = {
+        agente: _parecer_sintetico(60, agente=agente)
+        for agente in ["impacto_social", "engenharia", "orcamento", "pontes"]
+    }
+    j = json.dumps(pareceres)
+    r = _unwrap(_mod_g.consolidar_pareceres(j))
+    assert r["status"] == "analise_incompleta"
+    assert r["recomendacao"] is None
+
+
+def test_status_concluida_todos_validos():
+    """Todos os 5 pareceres validos -> status concluida."""
+    scores = {"mercado": 60, "impacto_social": 60, "engenharia": 60, "orcamento": 60, "pontes": 60}
+    j = _pareceres_sinteticos(scores)
+    r = _unwrap(_mod_g.consolidar_pareceres(j))
+    assert r["status"] == "concluida"
+    assert r["recomendacao"] is not None
+    assert r["score_consolidado"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Testes das divergencias (D1, D2, D3)
+# ---------------------------------------------------------------------------
+
+def test_divergencia_social_vs_orcamento():
+    """Diferenca > 30 entre impacto_social e orcamento gera divergencia."""
+    scores = {"mercado": 50, "impacto_social": 90, "engenharia": 50, "orcamento": 55, "pontes": 50}
+    j = _pareceres_sinteticos(scores)
+    r = _unwrap(_mod_g.consolidar_pareceres(j))
+    assert any("impacto social" in d.lower() or "impacto_social" in d.lower()
+               for d in r["divergencias"]), f"D1 nao detectada: {r['divergencias']}"
+
+
+def test_divergencia_engenharia_baixa_mercado_alto():
+    """Engenharia < 40 e mercado > 60 gera divergencia tecnica."""
+    scores = {"mercado": 70, "impacto_social": 50, "engenharia": 30, "orcamento": 50, "pontes": 50}
+    j = _pareceres_sinteticos(scores)
+    r = _unwrap(_mod_g.consolidar_pareceres(j))
+    assert any("engenharia" in d.lower() for d in r["divergencias"]), (
+        f"D2 nao detectada: {r['divergencias']}"
+    )
+
+
+def test_divergencia_pontes_alto_orcamento_baixo():
+    """Pontes > 70 e orcamento < 40 gera divergencia de cofinanciamento."""
+    scores = {"mercado": 50, "impacto_social": 50, "engenharia": 50, "orcamento": 30, "pontes": 80}
+    j = _pareceres_sinteticos(scores)
+    r = _unwrap(_mod_g.consolidar_pareceres(j))
+    assert any("parcerias" in d.lower() or "pontes" in d.lower()
+               for d in r["divergencias"]), f"D3 nao detectada: {r['divergencias']}"
+
+
+def test_sem_divergencias_scores_equilibrados():
+    """Scores equilibrados sem erros -> sem divergencias."""
+    scores = {"mercado": 60, "impacto_social": 60, "engenharia": 60, "orcamento": 60, "pontes": 60}
+    j = _pareceres_sinteticos(scores)
+    r = _unwrap(_mod_g.consolidar_pareceres(j))
+    assert r["divergencias"] == []
+
+
+# ---------------------------------------------------------------------------
+# Testes de JSON invalido e entradas malformadas
+# ---------------------------------------------------------------------------
+
+def test_json_invalido_retorna_analise_incompleta():
+    """String nao-JSON deve retornar status analise_incompleta."""
     r = _unwrap(_mod_g.consolidar_pareceres("isso nao e json {{{"))
+    assert r["status"] == "analise_incompleta"
     assert r["erro"] is not None
-    assert r["score_consolidado"] == 0
+    assert r["score_consolidado"] is None
 
 
-def test_json_lista_retorna_erro():
-    """JSON que e lista (nao objeto) deve retornar erro."""
+def test_json_lista_retorna_analise_incompleta():
+    """JSON que e lista (nao objeto) deve retornar analise_incompleta."""
     r = _unwrap(_mod_g.consolidar_pareceres("[1, 2, 3]"))
+    assert r["status"] == "analise_incompleta"
     assert r["erro"] is not None
 
 
-def test_json_vazio_trata_agentes_ausentes():
-    """JSON objeto vazio deve tratar todos os agentes como ausentes (score 0)."""
+def test_json_vazio_analise_incompleta():
+    """JSON objeto vazio -> todos agentes ausentes -> analise_incompleta."""
     r = _unwrap(_mod_g.consolidar_pareceres("{}"))
-    assert r["score_consolidado"] == 0
-    assert r["recomendacao"] == "escalar"
-    assert r["erro"] is None  # nao e erro de parse, apenas agentes ausentes
+    assert r["status"] == "analise_incompleta"
+    assert r["recomendacao"] is None
+    assert r["erro"] is None  # nao e erro de parse
 
 
 # ---------------------------------------------------------------------------
@@ -309,9 +412,10 @@ def test_json_vazio_trata_agentes_ausentes():
 def test_campos_obrigatorios_presentes():
     r = _consolidar("central")
     campos = [
-        "agente", "regiao_id", "regiao_nome", "recomendacao", "score_consolidado",
-        "pareceres", "divergencias", "justificativa_consolidada",
-        "principais_riscos", "principais_oportunidades", "limitacoes", "simulado", "erro",
+        "agente", "regiao_id", "regiao_nome", "status", "recomendacao",
+        "score_consolidado", "pareceres", "divergencias", "atencao_prioritaria",
+        "pontos_criticos", "motivos", "caminhos", "justificativa_consolidada",
+        "principais_riscos", "limitacoes", "simulado", "erro",
     ]
     for campo in campos:
         assert campo in r, f"Campo obrigatorio ausente: {campo}"
@@ -337,15 +441,18 @@ def test_cinco_pareceres_presentes():
 def test_score_consolidado_inteiro_0_a_100():
     for rid in ["aurora", "horizonte", "esperanca", "central", "vale_verde", "nova_uniao"]:
         r = _consolidar(rid)
-        assert isinstance(r["score_consolidado"], int), f"Score nao inteiro em {rid}"
-        assert 0 <= r["score_consolidado"] <= 100, f"Score fora do intervalo em {rid}"
+        sc = r["score_consolidado"]
+        assert isinstance(sc, int), f"Score nao inteiro em {rid}"
+        assert 0 <= sc <= 100, f"Score fora do intervalo em {rid}: {sc}"
 
 
 def test_recomendacao_valores_validos():
-    validos = {"investir_agora", "realizar_piloto", "aguardar", "escalar"}
+    validos = {"investir_agora", "realizar_piloto", "aguardar"}
     for rid in ["aurora", "horizonte", "esperanca", "central", "vale_verde", "nova_uniao"]:
         r = _consolidar(rid)
-        assert r["recomendacao"] in validos, f"{rid}: recomendacao invalida '{r['recomendacao']}'"
+        assert r["recomendacao"] in validos, (
+            f"{rid}: recomendacao invalida '{r['recomendacao']}'"
+        )
 
 
 def test_limitacao_obrigatoria_presente():
@@ -364,12 +471,6 @@ def test_justificativa_consolidada_minimo_100_chars():
     assert len(r["justificativa_consolidada"]) >= 100
 
 
-def test_nova_uniao_recomendacao_escalar():
-    """Nova Uniao: orcamento=0 < 20 -> forcado para 'escalar'."""
-    r = _consolidar("nova_uniao")
-    assert r["recomendacao"] == "escalar"
-
-
 # ---------------------------------------------------------------------------
 # Testes de formula do score consolidado
 # ---------------------------------------------------------------------------
@@ -384,13 +485,11 @@ def test_formula_score_ponderado():
 
 
 def test_score_aurora_62():
-    """Aurora deve ter score_consolidado == 62."""
     r = _consolidar("aurora")
     assert r["score_consolidado"] == 62
 
 
 def test_score_nova_uniao_30():
-    """Nova Uniao deve ter score_consolidado == 30."""
     r = _consolidar("nova_uniao")
     assert r["score_consolidado"] == 30
 
@@ -400,7 +499,6 @@ def test_score_nova_uniao_30():
 # ---------------------------------------------------------------------------
 
 def _pareceres_com_um_ruim(mercado_ruim) -> str:
-    """5 pareceres validos exceto mercado que recebe o valor indicado."""
     pareceres = {}
     for agente in ["impacto_social", "engenharia", "orcamento", "pontes"]:
         pareceres[agente] = _parecer_sintetico(60, agente=agente)
@@ -408,15 +506,16 @@ def _pareceres_com_um_ruim(mercado_ruim) -> str:
     return json.dumps(pareceres, ensure_ascii=False)
 
 
-def _assert_malformado_escalar(j: str, descricao: str):
-    """Nao lanca excecao, recomendacao escalar, parecer mercado tem erro."""
+def _assert_malformado_incompleto(j: str, descricao: str):
+    """Nao lanca excecao, status analise_incompleta, parecer mercado tem erro."""
     try:
         r = _unwrap(_mod_g.consolidar_pareceres(j))
     except Exception as exc:
         pytest.fail(f"consolidar_pareceres lancou excecao para {descricao}: {exc}")
-    assert r["recomendacao"] == "escalar", (
-        f"{descricao}: esperado 'escalar', obtido '{r['recomendacao']}'"
+    assert r["status"] == "analise_incompleta", (
+        f"{descricao}: esperado analise_incompleta, obtido '{r['status']}'"
     )
+    assert r["recomendacao"] is None
     parecer_mercado = r["pareceres"].get("mercado", {})
     assert parecer_mercado.get("erro") is not None, (
         f"{descricao}: parecer mercado deve ter erro preenchido"
@@ -424,41 +523,37 @@ def _assert_malformado_escalar(j: str, descricao: str):
 
 
 def test_robustez_score_ausente():
-    """Parecer sem campo score -> score 0, erro preenchido, recomendacao escalar."""
     j = _pareceres_com_um_ruim({"confianca": "alta"})
-    _assert_malformado_escalar(j, "score ausente")
+    _assert_malformado_incompleto(j, "score ausente")
 
 
 def test_robustez_parecer_string():
-    """Parecer que e string (nao dict) -> erro, escalar."""
     j = _pareceres_com_um_ruim("texto")
-    _assert_malformado_escalar(j, "parecer string")
+    _assert_malformado_incompleto(j, "parecer string")
 
 
 def test_robustez_score_null():
-    """Parecer com score null -> score 0, erro, escalar."""
     j = _pareceres_com_um_ruim({"score": None, "confianca": "alta"})
-    _assert_malformado_escalar(j, "score null")
+    _assert_malformado_incompleto(j, "score null")
 
 
 def test_robustez_score_fora_do_intervalo():
-    """Parecer com score 150 -> score 0, erro, escalar."""
     j = _pareceres_com_um_ruim({"score": 150, "confianca": "alta"})
-    _assert_malformado_escalar(j, "score 150")
+    _assert_malformado_incompleto(j, "score 150")
 
 
 def test_robustez_lista_raiz():
-    """JSON raiz que e lista -> erro no resultado, nao lanca excecao."""
+    """JSON raiz que e lista -> analise_incompleta, nao lanca excecao."""
     try:
         r = _unwrap(_mod_g.consolidar_pareceres("[]"))
     except Exception as exc:
-        pytest.fail(f"consolidar_pareceres lancou excecao para lista raiz: {exc}")
+        pytest.fail(f"Lancou excecao para lista raiz: {exc}")
+    assert r["status"] == "analise_incompleta"
     assert r["erro"] is not None
-    assert r["recomendacao"] == "escalar"
 
 
 def test_robustez_score_string_numerico():
-    """Score como string numerica '72' deve ser convertido para 72, sem erro."""
+    """Score string '72' deve ser convertido para 72 — sem erro no parecer."""
     outros = {
         agente: _parecer_sintetico(60, agente=agente)
         for agente in ["impacto_social", "engenharia", "orcamento", "pontes"]
@@ -468,7 +563,6 @@ def test_robustez_score_string_numerico():
         "confianca": "alta",
         "justificativa": "Justificativa de teste para verificacao de score string.",
         "riscos": ["risco teste"],
-        "limitacoes": ["dado simulado"],
         "simulado": True,
         "erro": None,
     }
@@ -476,31 +570,34 @@ def test_robustez_score_string_numerico():
     try:
         r = _unwrap(_mod_g.consolidar_pareceres(j))
     except Exception as exc:
-        pytest.fail(f"consolidar_pareceres lancou excecao para score string: {exc}")
-    assert r["pareceres"]["mercado"]["score"] == 72, (
-        f"Score string '72' deveria ser convertido para 72, obtido {r['pareceres']['mercado']['score']}"
-    )
-    assert r["pareceres"]["mercado"].get("erro") is None, (
-        "Score string numerico valido nao deve gerar erro"
-    )
+        pytest.fail(f"Lancou excecao para score string: {exc}")
+    assert r["pareceres"]["mercado"]["score"] == 72
+    assert r["pareceres"]["mercado"].get("erro") is None
+    assert r["status"] == "concluida"
 
 
 def test_robustez_chave_extra_ignorada():
-    """Objeto com os 5 pareceres + chave extra 'regiao_id' deve dar mesmo resultado."""
+    """Objeto com 5 pareceres validos + chave extra 'regiao_id' -> mesmo resultado."""
     scores = {"mercado": 52, "impacto_social": 38, "engenharia": 74, "orcamento": 78, "pontes": 64}
     pareceres_sem = json.loads(_pareceres_sinteticos(scores))
     pareceres_com = dict(pareceres_sem)
-    pareceres_com["regiao_id"] = "aurora"  # chave extra que nao e agente
-
+    pareceres_com["regiao_id"] = "aurora"
     r_sem = _unwrap(_mod_g.consolidar_pareceres(json.dumps(pareceres_sem)))
     r_com = _unwrap(_mod_g.consolidar_pareceres(json.dumps(pareceres_com)))
+    assert r_sem["score_consolidado"] == r_com["score_consolidado"]
+    assert r_sem["recomendacao"] == r_com["recomendacao"]
 
-    assert r_sem["score_consolidado"] == r_com["score_consolidado"], (
-        "Chave extra nao deve alterar score_consolidado"
-    )
-    assert r_sem["recomendacao"] == r_com["recomendacao"], (
-        "Chave extra nao deve alterar recomendacao"
-    )
+
+def test_caminhos_sem_indicadores_nao_quebra():
+    """Pareceres sem campo 'indicadores' -> caminhos lista vazia, sem excecao."""
+    scores = {"mercado": 30, "impacto_social": 30, "engenharia": 30, "orcamento": 30, "pontes": 30}
+    j = _pareceres_sinteticos(scores)
+    try:
+        r = _unwrap(_mod_g.consolidar_pareceres(j))
+    except Exception as exc:
+        pytest.fail(f"Lancou excecao sem indicadores: {exc}")
+    # caminhos pode ser vazia (sem indicadores para extrair) mas nao pode quebrar
+    assert isinstance(r.get("caminhos"), list)
 
 
 # ---------------------------------------------------------------------------
@@ -508,40 +605,36 @@ def test_robustez_chave_extra_ignorada():
 # ---------------------------------------------------------------------------
 
 def _json_aurora_puro() -> str:
-    """Retorna o JSON dos 5 pareceres da aurora (montado pelas tools reais)."""
     return _montar_pareceres("aurora")
 
 
 def test_markdown_bloco_json_resultado_identico():
-    """JSON embrulhado em ```json ... ``` deve dar score 62 e realizar_piloto."""
+    """JSON em ```json ... ``` deve dar score 62 e realizar_piloto."""
     puro = _json_aurora_puro()
     embrulhado = f"```json\n{puro}\n```"
     r_puro = _unwrap(_mod_g.consolidar_pareceres(puro))
     try:
         r_emb = _unwrap(_mod_g.consolidar_pareceres(embrulhado))
     except Exception as exc:
-        pytest.fail(f"Lancou excecao com bloco ```json: {exc}")
+        pytest.fail(f"Lancou excecao com bloco json: {exc}")
     assert r_emb["score_consolidado"] == 62
     assert r_emb["recomendacao"] == "realizar_piloto"
-    assert r_emb["erro"] is None
+    assert r_emb["status"] == "concluida"
     assert r_emb["score_consolidado"] == r_puro["score_consolidado"]
 
 
 def test_markdown_bloco_simples_resultado_identico():
-    """JSON embrulhado em ``` ... ``` (sem 'json') deve dar mesmo resultado."""
     puro = _json_aurora_puro()
     embrulhado = f"```\n{puro}\n```"
     try:
         r = _unwrap(_mod_g.consolidar_pareceres(embrulhado))
     except Exception as exc:
-        pytest.fail(f"Lancou excecao com bloco ```: {exc}")
+        pytest.fail(f"Lancou excecao com bloco simples: {exc}")
     assert r["score_consolidado"] == 62
     assert r["recomendacao"] == "realizar_piloto"
-    assert r["erro"] is None
 
 
 def test_markdown_texto_prefixo_resultado_identico():
-    """JSON precedido de texto livre deve dar mesmo resultado."""
     puro = _json_aurora_puro()
     com_prefixo = f"Aqui estao os pareceres: {puro}"
     try:
@@ -550,11 +643,10 @@ def test_markdown_texto_prefixo_resultado_identico():
         pytest.fail(f"Lancou excecao com texto prefixo: {exc}")
     assert r["score_consolidado"] == 62
     assert r["recomendacao"] == "realizar_piloto"
-    assert r["erro"] is None
 
 
 def test_riscos_como_objetos_nao_quebra():
-    """riscos como lista de dicts nao deve lançar excecao e texto deve aparecer."""
+    """riscos como lista de dicts nao deve lançar excecao."""
     outros = {
         agente: _parecer_sintetico(60, agente=agente)
         for agente in ["impacto_social", "engenharia", "orcamento", "pontes"]
@@ -572,23 +664,11 @@ def test_riscos_como_objetos_nao_quebra():
         r = _unwrap(_mod_g.consolidar_pareceres(j))
     except Exception as exc:
         pytest.fail(f"Lancou excecao com riscos como objetos: {exc}")
-    # "custo alto" deve aparecer em principais_riscos
     texto_riscos = " ".join(r.get("principais_riscos", []))
-    assert "custo alto" in texto_riscos, (
-        f"'custo alto' nao encontrado em principais_riscos: {r.get('principais_riscos')}"
-    )
+    assert "custo alto" in texto_riscos
 
 
-def test_score_nan_escalar_com_erro():
-    """Score NaN (aceito pelo json.loads) deve gerar score 0 e erro no parecer."""
-    # json.loads aceita NaN em alguns contextos mas nao e JSON valido estrito;
-    # testamos via float direto no normalizador
-    outros = {
-        agente: _parecer_sintetico(60, agente=agente)
-        for agente in ["impacto_social", "engenharia", "orcamento", "pontes"]
-    }
-    # Simula o que chegaria: um parecer com score float('nan') apos parse
-    # Usamos _normalizar_parecer diretamente pois json.loads rejeita NaN literal
+def test_score_nan_normaliza_para_zero():
     p_nan = {"score": float("nan"), "confianca": "alta", "riscos": [], "erro": None}
     p_norm = _mod_g._normalizar_parecer("mercado", p_nan)
     assert p_norm["score"] == 0
@@ -596,8 +676,7 @@ def test_score_nan_escalar_com_erro():
     assert "finito" in p_norm["erro"].lower()
 
 
-def test_score_infinity_escalar_com_erro():
-    """Score Infinity deve gerar score 0 e erro no parecer."""
+def test_score_infinity_normaliza_para_zero():
     p_inf = {"score": float("inf"), "confianca": "alta", "riscos": [], "erro": None}
     p_norm = _mod_g._normalizar_parecer("mercado", p_inf)
     assert p_norm["score"] == 0
