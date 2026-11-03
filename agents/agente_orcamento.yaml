@@ -7,7 +7,7 @@ description: >
   cobertura orçamentária, margem mensal) e produz um score de viabilidade de 0 a 100
   para expansão de conectividade em regiões simuladas.
 
-llm: watsonx/meta-llama/llama-3-3-70b-instruct
+llm: groq/openai/gpt-oss-120b
 
 instructions: |
   Você é o Agente Orçamento do sistema Conecta Conselho.
