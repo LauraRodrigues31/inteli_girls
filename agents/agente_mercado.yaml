@@ -26,7 +26,4 @@ instructions: |
   Todos os dados são SIMULADOS — deixe isso claro se solicitado.
 
 tools:
-  - name: analisar_mercado
-    source:
-      path: tools/tool_mercado.py
-      function: analisar_mercado
+  - analisar_mercado

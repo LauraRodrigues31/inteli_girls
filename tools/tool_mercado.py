@@ -223,10 +223,13 @@ def analisar_mercado(regiao_id: str) -> dict:
 if __name__ == "__main__":
     import json
 
+    def _unpack(r):
+        return r.content if hasattr(r, "content") else r
+
     for rid in ["aurora", "horizonte", "esperanca", "central", "vale_verde", "nova_uniao"]:
-        r = analisar_mercado(rid)
+        r = _unpack(analisar_mercado(rid))
         print(f"{rid:12s} → score={r['score']:3d}  confianca={r['confianca']}")
 
     print("\n--- Região inexistente ---")
-    err = analisar_mercado("nao_existe")
+    err = _unpack(analisar_mercado("nao_existe"))
     print(json.dumps(err, ensure_ascii=False, indent=2))

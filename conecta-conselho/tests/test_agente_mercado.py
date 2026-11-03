@@ -25,7 +25,10 @@ _spec = _ilu.spec_from_file_location("tool_mercado", _TOOL_PATH)
 _mod = _ilu.module_from_spec(_spec)  # type: ignore[arg-type]
 _spec.loader.exec_module(_mod)  # type: ignore[union-attr]
 
-analisar_mercado = _mod.analisar_mercado
+def analisar_mercado(regiao_id):
+    r = _mod.analisar_mercado(regiao_id)
+    return r.content if hasattr(r, "content") else r
+
 calcular_score_mercado = _mod.calcular_score_mercado
 
 # ---------------------------------------------------------------------------
