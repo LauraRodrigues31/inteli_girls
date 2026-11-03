@@ -111,8 +111,10 @@ import json; print(json.dumps(mod.montar_parecer('aurora'), ensure_ascii=False, 
 ### Interface Streamlit
 
 ```powershell
-streamlit run conecta-conselho/app.py
+python -m streamlit run conecta-conselho/app.py
 ```
+
+(com o ambiente virtual ativo; abrir fora do venv causa erro de módulo do ADK)
 
 Modo padrão: local (cálculos determinísticos, sem nuvem).
 
