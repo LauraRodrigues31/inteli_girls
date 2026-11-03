@@ -155,21 +155,31 @@ def _get_agent_id(agent_name: str) -> str:
     )
     output = result.stdout.decode("utf-8", errors="ignore")
 
-    # Tenta parse JSON se a saída for JSON
+    # Tenta parse JSON — a saída pode ser lista ou dict {native:[...], assistant:[...], external:[...]}
     try:
-        agents = json.loads(output)
-        if isinstance(agents, list):
-            for ag in agents:
-                if isinstance(ag, dict):
-                    name = ag.get("name", "") or ag.get("agent_name", "")
-                    if name == agent_name:
-                        aid = ag.get("id") or ag.get("agent_id")
-                        if aid:
-                            return str(aid)
+        parsed = json.loads(output)
+        # Normaliza para lista plana de agentes
+        agent_list: list = []
+        if isinstance(parsed, list):
+            agent_list = parsed
+        elif isinstance(parsed, dict):
+            for v in parsed.values():
+                if isinstance(v, list):
+                    agent_list.extend(v)
+
+        for ag in agent_list:
+            if not isinstance(ag, dict):
+                continue
+            # O campo name pode ter \n no final — strip para comparação
+            name = (ag.get("name") or ag.get("agent_name") or "").strip()
+            if name == agent_name:
+                aid = ag.get("id") or ag.get("agent_id")
+                if aid:
+                    return str(aid).strip()
     except (json.JSONDecodeError, ValueError):
         pass
 
-    # Fallback: busca por UUID na linha que contém o nome
+    # Fallback de texto: UUID na mesma linha que contém o nome do agente
     uuid_pattern = re.compile(
         r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
         re.IGNORECASE
@@ -180,11 +190,10 @@ def _get_agent_id(agent_name: str) -> str:
             if match:
                 return match.group()
 
-    # Último recurso: procura pela linha 'id:' após uma linha com o nome
+    # Último recurso: UUID nas linhas próximas a uma linha com o nome
     lines = output.splitlines()
     for i, line in enumerate(lines):
         if agent_name in line:
-            # Olha as próximas 10 linhas em busca de 'id:'
             for j in range(i, min(i + 10, len(lines))):
                 m = uuid_pattern.search(lines[j])
                 if m:
@@ -202,15 +211,31 @@ def _get_agent_id(agent_name: str) -> str:
 # Cálculo de scores esperados (local)
 # ---------------------------------------------------------------------------
 
+_VENV_PYTHON = _ROOT / ".venv" / "Scripts" / "python.exe"
+
+
 def _load_tool_module(nome: str):
-    """Carrega tools/tool_<nome>.py pelo caminho do arquivo."""
+    """
+    Carrega tools/tool_<nome>.py pelo caminho do arquivo.
+    Usa o venv Python via subprocess para calcular scores — a ferramenta
+    depende do ibm_watsonx_orchestrate que está no venv, não no sistema.
+    """
+    # Tenta importar directamente se o ADK estiver disponível neste Python
     path = _ROOT / "tools" / f"tool_{nome}.py"
-    spec = importlib.util.spec_from_file_location(f"tool_{nome}", path)
-    assert spec is not None, f"Não foi possível criar spec para {path}"
-    mod = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(mod)  # type: ignore[union-attr]
-    return mod
+    try:
+        import ibm_watsonx_orchestrate  # noqa: F401 — só testa se está disponível
+        spec = importlib.util.spec_from_file_location(f"tool_{nome}", path)
+        assert spec is not None
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(mod)  # type: ignore[union-attr]
+        return mod
+    except ImportError:
+        pass
+
+    # Fallback: importa via venv Python num subprocesso e devolve os resultados
+    # em vez de devolver um módulo. Neste caso devolvemos um objecto-simulacro.
+    return None  # sinaliza para _calcular_esperados usar o caminho de subprocess
 
 
 def _unpack(result) -> dict:
@@ -218,11 +243,55 @@ def _unpack(result) -> dict:
 
 
 def _calcular_esperados(nome: str) -> dict[str, dict]:
-    """Roda a ferramenta local para as 6 regiões e retorna {regiao_id: parecer}."""
-    mod = _load_tool_module(nome)
-    fn = getattr(mod, _TOOL_FN[nome])
+    """
+    Calcula os scores esperados rodando a ferramenta local para as 6 regiões.
+    Se o ADK não estiver disponível neste Python, usa o venv Python via subprocess.
+    """
     regioes = ["aurora", "horizonte", "esperanca", "central", "vale_verde", "nova_uniao"]
-    return {rid: _unpack(fn(rid)) for rid in regioes}
+    fn_name = _TOOL_FN[nome]
+
+    mod = _load_tool_module(nome)
+    if mod is not None:
+        fn = getattr(mod, fn_name)
+        return {rid: _unpack(fn(rid)) for rid in regioes}
+
+    # Caminho via venv Python
+    venv_py = str(_VENV_PYTHON) if _VENV_PYTHON.exists() else sys.executable
+    tool_path = str(_ROOT / "tools" / f"tool_{nome}.py")
+
+    script = f"""
+import importlib.util, json, sys, os
+# Redireciona stdout temporariamente para suprimir prints do @tool
+import io, contextlib
+tool_path = {tool_path!r}
+spec = importlib.util.spec_from_file_location("tool", tool_path)
+mod = importlib.util.module_from_spec(spec)
+# Suprime WARNING/INFO durante o carregamento do módulo
+with contextlib.redirect_stdout(open(os.devnull, "w")):
+    spec.loader.exec_module(mod)
+fn = getattr(mod, {fn_name!r})
+regioes = {regioes!r}
+result = {{}}
+for rid in regioes:
+    with contextlib.redirect_stdout(open(os.devnull, "w")):
+        r = fn(rid)
+    result[rid] = r.content if hasattr(r, "content") else r
+# Escreve JSON directamente para o fd original de stdout
+sys.stdout.write(json.dumps(result, ensure_ascii=False))
+sys.stdout.flush()
+"""
+    proc = subprocess.run(
+        [venv_py, "-c", script],
+        capture_output=True, timeout=30
+    )
+    raw_out = proc.stdout.decode("utf-8", errors="ignore").strip()
+    if proc.returncode != 0 or not raw_out:
+        stderr_txt = proc.stderr.decode("utf-8", errors="ignore")
+        raise RuntimeError(
+            "Falha ao calcular scores esperados localmente.\n"
+            f"stderr: {stderr_txt[:500]}"
+        )
+    return json.loads(raw_out)
 
 
 # ---------------------------------------------------------------------------
