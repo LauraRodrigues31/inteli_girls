@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Resolve imports independente do diretório de execução
+# Resolve imports independente do diretório de execução (Linux-safe, sem \)
 # ---------------------------------------------------------------------------
 _CC_DIR = Path(__file__).resolve().parent.parent
 _ROOT   = _CC_DIR.parent
@@ -61,6 +61,23 @@ _SECOES_INDICADORES = {
     "Parcerias":   "parcerias",
 }
 
+# TTL do cache de resultados da nuvem (em segundos)
+_CACHE_TTL_SEGUNDOS = 6 * 60 * 60  # 6 horas
+
+# ---------------------------------------------------------------------------
+# Cache de resultados da nuvem (st.cache_data com TTL de 6 horas)
+# ---------------------------------------------------------------------------
+
+
+@st.cache_data(ttl=_CACHE_TTL_SEGUNDOS, show_spinner=False)
+def _consultar_nuvem_cached(regiao_id: str, fonte: str) -> dict:
+    """
+    Executa chamar_guardiao no modo nuvem e armazena o resultado em cache.
+    Chave de cache = (regiao_id, fonte).  TTL = 6 horas.
+    """
+    return chamar_guardiao(regiao_id, fonte=fonte)
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -94,6 +111,17 @@ def _formatar_valor(v) -> str:
     if v is None:
         return "—"
     return str(v)
+
+
+def _credenciais_e_ids_disponiveis() -> bool:
+    """
+    Retorna True se as credenciais WXO e os 5 IDs de agente estiverem
+    disponíveis (em os.environ ou .env).  Usado para definir a fonte padrão.
+    """
+    from cliente_nuvem import carregar_credenciais  # type: ignore[import]
+    creds_ok = "erro" not in carregar_credenciais()
+    ids_ok, _ = _verificar_credenciais_nuvem()
+    return creds_ok and ids_ok
 
 
 def _inicializar_estado():
@@ -132,12 +160,29 @@ def _ranking() -> list[dict]:
 
 
 def _seletor_fonte() -> str:
+    """
+    Exibe o seletor de fonte na barra lateral.
+
+    Fonte padrão:
+    - "IBM watsonx Orchestrate" se as credenciais e os 5 IDs estiverem disponíveis.
+    - "Local" caso contrário, com um aviso discreto.
+    """
     with st.sidebar:
         st.header("⚙️ Configurações")
+
+        nuvem_disponivel = _credenciais_e_ids_disponiveis()
+        indice_padrao = 1 if nuvem_disponivel else 0  # 0=Local, 1=IBM watsonx
+
+        if not nuvem_disponivel:
+            st.caption(
+                "ℹ️ Credenciais ou IDs de agente não configurados — "
+                "fonte padrão: Local."
+            )
+
         opcao = st.radio(
             "Fonte dos pareceres:",
             options=["Local", "IBM watsonx Orchestrate"],
-            index=0,
+            index=indice_padrao,
             key="seletor_fonte",
         )
         fonte_escolhida = "nuvem" if opcao == "IBM watsonx Orchestrate" else "local"
@@ -241,15 +286,20 @@ def _card_agente(nome_chave: str, parecer: dict):
                         st.markdown(f"- {lim}")
 
 
-def _secao_resultado(resultado: dict):
+def _secao_resultado(resultado: dict, *, veio_do_cache: bool = False):
     if not resultado:
         return
 
     status = resultado.get("status", "concluida")
+    fonte  = resultado.get("fonte", "local")
 
     st.divider()
     st.subheader("🤖 Análise dos Agentes Especialistas")
     st.caption(_AVISO_SIMULADO)
+
+    # Indicador de cache — exibido discretamente quando o resultado vem do cache
+    if veio_do_cache and fonte == "nuvem":
+        st.caption("📦 resultado em cache (IBM watsonx Orchestrate)")
 
     pareceres = resultado.get("pareceres", {})
     for nome_chave in ["mercado", "impacto_social", "engenharia", "orcamento", "pontes"]:
@@ -268,6 +318,27 @@ def _secao_resultado(resultado: dict):
                 nome = af.get("agente", "—")
                 motivo = af.get("motivo", "erro desconhecido")
                 st.markdown(f"- **{_NOMES_AGENTES.get(nome, nome)}**: {motivo}")
+
+        # Botão "Analisar no modo Local" quando a nuvem falhou
+        if fonte == "nuvem":
+            st.info(
+                "💡 A análise na nuvem terminou incompleta. "
+                "Você pode analisar esta região no modo Local."
+            )
+            regiao_id = resultado.get("regiao_id", "")
+            if st.button(
+                "🖥️ Analisar no modo Local",
+                key=f"fallback_local_{regiao_id}",
+            ):
+                with st.spinner(f"Analisando {regiao_id} no modo local..."):
+                    try:
+                        resultado_local = chamar_guardiao(regiao_id, fonte="local")
+                        st.session_state[f"resultado_{regiao_id}"] = resultado_local
+                        _registrar_historico(resultado_local)
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Erro no modo local: {exc}")
+
         st.divider()
         json_bytes = json.dumps(resultado, ensure_ascii=False, indent=2).encode("utf-8")
         st.download_button(
@@ -332,7 +403,6 @@ def _secao_resultado(resultado: dict):
             for lim in limitacoes_g:
                 st.caption(f"— {lim}")
 
-    fonte = resultado.get("fonte", "local")
     tempo = resultado.get("tempo_analise_segundos")
     fonte_label = "☁️ IBM watsonx Orchestrate" if fonte == "nuvem" else "💻 Local"
     if tempo is not None:
@@ -422,11 +492,21 @@ def render():
         regiao_id, regioes, executar = _secao_selecao()
         _secao_indicadores(regiao_id)
 
+        veio_do_cache = False
+
         if executar:
+            if fonte == "nuvem":
+                # Limpa o cache desta região antes de consultar novamente
+                _consultar_nuvem_cached.clear()
+
             with st.spinner(f"Executando o Conselho para {regiao_id}..."):
                 try:
-                    resultado = chamar_guardiao(regiao_id, fonte=fonte)
+                    if fonte == "nuvem":
+                        resultado = _consultar_nuvem_cached(regiao_id, fonte)
+                    else:
+                        resultado = chamar_guardiao(regiao_id, fonte=fonte)
                     st.session_state[f"resultado_{regiao_id}"] = resultado
+                    st.session_state[f"cache_flag_{regiao_id}_{fonte}"] = False
                     _registrar_historico(resultado)
                     if resultado.get("status") == "analise_incompleta":
                         st.warning("Análise incompleta — verifique os agentes com falha.")
@@ -438,8 +518,39 @@ def render():
                     st.error(f"Erro inesperado: {e}")
 
         resultado_atual = st.session_state.get(f"resultado_{regiao_id}")
+
+        # Botão "Consultar a IBM novamente" — limpa cache e re-executa na nuvem
+        if resultado_atual and fonte == "nuvem":
+            col_cache, _ = st.columns([2, 3])
+            with col_cache:
+                if st.button(
+                    "🔄 Consultar a IBM novamente",
+                    key=f"refetch_{regiao_id}",
+                    help="Ignora o cache e busca uma nova análise na nuvem.",
+                ):
+                    _consultar_nuvem_cached.clear()
+                    with st.spinner(f"Consultando a IBM para {regiao_id}..."):
+                        try:
+                            resultado_atual = _consultar_nuvem_cached(regiao_id, fonte)
+                            st.session_state[f"resultado_{regiao_id}"] = resultado_atual
+                            st.session_state[f"cache_flag_{regiao_id}_{fonte}"] = False
+                            _registrar_historico(resultado_atual)
+                            veio_do_cache = False
+                            st.success("Nova consulta concluída!")
+                        except Exception as e:
+                            st.error(f"Erro ao reconsutar: {e}")
+
+            # Verifica se o resultado veio de uma requisição anterior (cache)
+            cache_flag_key = f"cache_flag_{regiao_id}_{fonte}"
+            # Se o flag não existe ainda, é porque o resultado veio de uma sessão anterior
+            # ou de um cache hit (o botão "Executar" não foi pressionado agora)
+            if not executar and cache_flag_key not in st.session_state:
+                veio_do_cache = True
+            else:
+                veio_do_cache = st.session_state.get(cache_flag_key, False)
+
         if resultado_atual:
-            _secao_resultado(resultado_atual)
+            _secao_resultado(resultado_atual, veio_do_cache=veio_do_cache)
 
     with aba_historico:
         st.caption(_AVISO_SIMULADO)
