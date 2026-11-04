@@ -50,10 +50,10 @@ from paginas import como_funciona, analise, mapa, simulador  # type: ignore[impo
 # ---------------------------------------------------------------------------
 paginas = st.navigation(
     [
-        st.Page(como_funciona.render, title="Como funciona",         icon="📖", default=True),
-        st.Page(analise.render,       title="Análise de Região",     icon="🔍"),
-        st.Page(mapa.render,          title="Mapa ilustrativo",      icon="🗺️"),
-        st.Page(simulador.render,     title="Simulador de cenários", icon="🧪"),
+        st.Page(como_funciona.render, title="Como funciona",         icon="📖", url_path="como-funciona", default=True),
+        st.Page(analise.render,       title="Análise de Região",     icon="🔍", url_path="analise"),
+        st.Page(mapa.render,          title="Mapa ilustrativo",      icon="🗺️", url_path="mapa"),
+        st.Page(simulador.render,     title="Simulador de cenários", icon="🧪", url_path="simulador"),
     ]
 )
 
