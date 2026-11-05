@@ -1846,7 +1846,7 @@ python -m pytest conecta-conselho/tests/test_dados_regioes.py -v
 
 - [ ] Retorna os cinco pareceres para todos os IDs válidos.
 - [ ] `recomendacao` é sempre um dos quatro valores válidos.
-- [ ] Nova União (`payback_meses = null`) recebe recomendação `"escalar"`.
+- [ ] Nova União (`payback_meses = null`) recebe recomendação `"aguardar"` com `atencao_prioritaria = true`.
 - [ ] `score_consolidado` usa os pesos documentados na Seção 11.
 - [ ] Divergências são identificadas quando critérios são atendidos.
 - [ ] Região inexistente retorna `erro != null`.
@@ -1870,10 +1870,10 @@ python -m pytest conecta-conselho/tests/test_dados_regioes.py -v
 
 | Critério | Mínimo exigido |
 |---|---|
-| Testes da base | 204/204 passando |
+| Testes da base | `python -m pytest -q` com todos os testes passando |
 | Testes do agente individual | 100% dos testes do arquivo próprio |
 | Testes do Guardião | 100% dos testes definidos na Seção 11 |
-| Merge para `chore/estrutura-pastas` | Sem regressão em testes existentes |
+| Merge para `develop` (PR revisado); release `develop → main` | Sem regressão em testes existentes |
 | Demonstração final | Análise completa das 6 regiões sem erro |
 
 ### 14.4 Executar Todos os Testes
@@ -2002,7 +2002,7 @@ A interface está **pronta** quando:
 
 O MVP está **pronto** quando:
 
-- [ ] 204 testes da base passando.
+- [ ] `python -m pytest -q` com todos os testes passando.
 - [ ] 5 agentes especialistas passando todos os seus testes.
 - [ ] Guardião passando todos os seus testes.
 - [ ] Interface Streamlit funcionando com integração real (não simulada).
