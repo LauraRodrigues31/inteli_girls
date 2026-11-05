@@ -17,11 +17,12 @@ import streamlit as st
 
 def criar_paginas() -> dict[str, st.Page]:
     """Retorna as páginas do app, na ordem do menu lateral."""
-    from paginas import analise, como_funciona, mapa, simulador  # type: ignore[import]
+    from paginas import analise, como_funciona, simulador  # type: ignore[import]
+    # A página "Mapa ilustrativo" foi removida: o seletor de mapa agora está
+    # embutido diretamente nas abas Análise de Região e Simulador de Cenários.
 
     return {
         "como_funciona": st.Page(como_funciona.render, title="Como funciona",         icon="📖", url_path="como-funciona", default=True),
         "analise":       st.Page(analise.render,       title="Análise de Região",     icon="🔍", url_path="analise"),
-        "mapa":          st.Page(mapa.render,          title="Mapa ilustrativo",      icon="🗺️", url_path="mapa"),
         "simulador":     st.Page(simulador.render,     title="Simulador de cenários", icon="🧪", url_path="simulador"),
     }

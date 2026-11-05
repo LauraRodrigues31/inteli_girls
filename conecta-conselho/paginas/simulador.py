@@ -25,6 +25,7 @@ for _p in [str(_ROOT), str(_CC_DIR)]:
 import streamlit as st
 from tools.consultar_regiao import listar_regioes, consultar_regiao  # type: ignore[import]
 from simulador import simular_cenario  # type: ignore[import]
+from paginas.mapa_seletor import renderizar_seletor_mapa, _SESSION_KEY  # type: ignore[import]
 
 # ---------------------------------------------------------------------------
 # Constantes — mesmo padrão visual da página de Análise
@@ -156,23 +157,36 @@ def render():
     )
     st.info(_AVISO_SIMULADO)
 
-    # --- Seleção da região ---
+    # --- Inicializa session key do mapa ---
+    if _SESSION_KEY not in st.session_state:
+        st.session_state[_SESSION_KEY] = None
+
+    # --- Seleção da região via mapa ---
     regioes = listar_regioes()
     opcoes_ids = [r["id"] for r in regioes]
-    opcoes_labels = {r["id"]: r["nome"] for r in regioes}
+
+    # Carrega dados completos para tooltips do mapa
+    try:
+        dados_map = {rid: consultar_regiao(rid) for rid in opcoes_ids}
+    except Exception:
+        dados_map = None
+
+    # O componente já exibe "Clique em uma região" e o selectbox recolhido
+    regiao_id_mapa = renderizar_seletor_mapa(dados_map, chart_key="mapa_simulador")
 
     # Botão de atalho — história do one-pager
     if st.button("▶️ História do one-pager: Esperança com parcerias", key="atalho_onepager"):
-        st.session_state["sim_regiao"] = "esperanca"
+        st.session_state[_SESSION_KEY] = "esperanca"
         st.session_state["sim_usar_parcerias"] = True
         st.session_state["sim_atalho_ativado"] = True
+        regiao_id_mapa = "esperanca"
+        st.rerun()
 
-    regiao_id = st.selectbox(
-        "Região:",
-        options=opcoes_ids,
-        format_func=lambda x: opcoes_labels.get(x, x),
-        key="sim_regiao",
-    )
+    # Se não há região ainda, aguarda seleção
+    if regiao_id_mapa is None:
+        return
+
+    regiao_id = regiao_id_mapa
 
     # --- Carrega dados originais da região para preencher os defaults dos controles ---
     dados_regiao = consultar_regiao(regiao_id)

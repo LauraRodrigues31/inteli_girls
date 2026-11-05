@@ -1,0 +1,11 @@
+{
+  "aviso": "Posições ilustrativas — regiões fictícias",
+  "angulos": {
+    "aurora":     20,
+    "horizonte":  80,
+    "esperanca": 140,
+    "central":   200,
+    "vale_verde": 260,
+    "nova_uniao": 320
+  }
+}
