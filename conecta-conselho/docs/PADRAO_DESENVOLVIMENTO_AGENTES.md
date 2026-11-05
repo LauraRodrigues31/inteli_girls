@@ -1465,17 +1465,25 @@ def calcular_score_consolidado(pareceres: dict) -> int:
 
 ### Identificação de Divergências
 
-O Guardião deve identificar e registrar no campo `divergencias` quando:
-- `impacto_social.score` difere de `orcamento.score` em mais de 30 pontos (alto impacto social mas baixa viabilidade financeira).
-- `engenharia.score` é menor que 40 mas `mercado.score` é maior que 60 (boa demanda, viabilidade técnica baixa).
-- `pontes.score` é maior que 70 mas `orcamento.score` é menor que 40 (parcerias podem viabilizar o que o orçamento não consegue sozinho).
+O Guardião identifica e registra no campo `divergencias` as seguintes situações (implementadas em `_identificar_divergencias` de `tool_guardiao.py`):
 
-Exemplo de divergência registrada:
-```json
-"divergencias": [
-  "Alto impacto social (score 88) contrastado com viabilidade financeira baixa (score 12). Parcerias e subsídios podem ser necessários para viabilização."
-]
-```
+**D1 — Divergência entre Impacto Social e Orçamento** (`abs(social − orcamento) > 30`):
+A regra vale nos **dois sentidos**, com texto diferente para cada direção:
+
+- **Social alto, orçamento baixo** (ex.: Nova União — social 78, orçamento 0):
+  > "Alto impacto social (score 78) contrastado com baixa viabilidade financeira (orçamento 0). Parcerias e subsídios podem ser necessários para viabilização."
+
+- **Orçamento alto, social baixo** (ex.: Central — orçamento 76, social 30):
+  > "Região financeiramente atrativa (orçamento 76), mas com baixo impacto social (social 30): avaliar contrapartidas sociais na expansão."
+
+**D2 — Boa demanda mas viabilidade técnica baixa** (`engenharia < 40` e `mercado > 60`):
+> "Boa demanda de mercado (score X) mas viabilidade técnica insuficiente (engenharia score Y). Expansão técnica necessária antes do investimento."
+
+**D3 — Parcerias fortes mas orçamento fraco** (`pontes > 70` e `orcamento < 40`):
+> "Forte potencial de parcerias (score X) pode viabilizar o que o orçamento não consegue sozinho (score Y). Estratégia de cofinanciamento recomendada."
+
+**Pareceres com erro** — se qualquer agente retornar `erro != null`, é registrado em `divergencias`:
+> "Parecer do agente 'engenharia' retornou erro: \<mensagem\>. Score utilizado: 0."
 
 ### Arquivos Permitidos
 
@@ -2036,7 +2044,7 @@ O retorno inclui `base`, `simulado`, `mudancas`, `premissas` e `simulado_localme
 | Parâmetro | Regra aplicada |
 |---|---|
 | `usar_parcerias` | `CAPEX_novo = round(capex × (1 − percentual_economia_potencial_pct / 100))` com o percentual vindo de `parcerias.percentual_economia_potencial_pct`. Orçamento e payback são recalculados. |
-| `distancia_backbone_km` | Substitui `distancia_backbone_km` nos dados de engenharia e recalcula com `calcular_score_engenharia(dados)` do `tool_engenharia`. Apenas o score de engenharia e o indicador `score_backbone` são atualizados no parecer. |
+| `distancia_backbone_km` | Substitui `distancia_backbone_km` nos dados de engenharia e recalcula com `calcular_score_engenharia(dados)` do `tool_engenharia`. No parecer de engenharia são atualizados: o `score`, o indicador `distancia_backbone_km` e o indicador `score_backbone`. |
 | `teto_investimento_reais` | Substitui `orcamento_disponivel_reais` para o cálculo dos indicadores financeiros. |
 | Payback (quando CAPEX ou orçamento muda) | `payback_novo = round(capex / (receita - opex))` se margem > 0; caso contrário `None`. Recalculado com `calcular_indicadores_financeiros` e `calcular_score_orcamento` do `tool_orcamento`. |
 | Mercado, Impacto Social, Pontes | **Não mudam** no cenário simulado. |
