@@ -75,10 +75,13 @@ def _consultar_nuvem_cached(regiao_id: str, fonte: str) -> dict:
     """
     Executa chamar_guardiao no modo nuvem e armazena o resultado em cache.
     Chave de cache = (regiao_id, fonte).  TTL = 6 horas.
-    Devolve sempre uma cópia com o campo "consultado_em" = time.time().
+    Devolve sempre uma cópia com os campos:
+      - "consultado_em"  = time.time()        (usado na exibição)
+      - "_consulta_ns"   = time.perf_counter_ns()  (usado na detecção de cache)
     """
     resultado = dict(chamar_guardiao(regiao_id, fonte=fonte))
     resultado["consultado_em"] = time.time()
+    resultado["_consulta_ns"] = time.perf_counter_ns()
     return resultado
 
 
@@ -89,11 +92,11 @@ def _consultar_nuvem(regiao_id: str, fonte: str, *, ignorar_cache: bool = False)
     """
     if ignorar_cache:
         _consultar_nuvem_cached.clear(regiao_id, fonte)
-    inicio = time.time()
+    inicio_ns = time.perf_counter_ns()
     resultado = _consultar_nuvem_cached(regiao_id, fonte)
     if resultado.get("status") == "analise_incompleta":
         _consultar_nuvem_cached.clear(regiao_id, fonte)
-    return resultado, resultado.get("consultado_em", inicio) < inicio
+    return resultado, resultado.get("_consulta_ns", inicio_ns) < inicio_ns
 
 
 # ---------------------------------------------------------------------------
