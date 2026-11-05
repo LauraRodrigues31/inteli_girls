@@ -91,29 +91,51 @@ _CACHE_TTL_SEGUNDOS = 6 * 60 * 60  # 6 horas
 
 
 @st.cache_data(ttl=_CACHE_TTL_SEGUNDOS, show_spinner=False)
-def _consultar_nuvem_cached(regiao_id: str, fonte: str) -> dict:
+def _consultar_nuvem_cached(
+    regiao_id: str,
+    fonte: str,
+    _ao_concluir_agente=None,  # prefixo "_" faz st.cache_data ignorar na chave
+) -> dict:
     """
     Executa chamar_guardiao no modo nuvem e armazena o resultado em cache.
     Chave de cache = (regiao_id, fonte).  TTL = 6 horas.
+    _ao_concluir_agente é ignorado na chave de cache (prefixo "_") mas
+    repassado para chamar_guardiao para disparar o st.status em tempo real.
     Devolve sempre uma cópia com os campos:
       - "consultado_em"  = time.time()        (usado na exibição)
       - "_consulta_ns"   = time.perf_counter_ns()  (usado na detecção de cache)
     """
-    resultado = dict(chamar_guardiao(regiao_id, fonte=fonte))
+    resultado = dict(
+        chamar_guardiao(
+            regiao_id,
+            fonte=fonte,
+            ao_concluir_agente=_ao_concluir_agente,
+        )
+    )
     resultado["consultado_em"] = time.time()
     resultado["_consulta_ns"] = time.perf_counter_ns()
     return resultado
 
 
-def _consultar_nuvem(regiao_id: str, fonte: str, *, ignorar_cache: bool = False) -> tuple[dict, bool]:
+def _consultar_nuvem(
+    regiao_id: str,
+    fonte: str,
+    *,
+    ignorar_cache: bool = False,
+    ao_concluir_agente=None,
+) -> tuple[dict, bool]:
     """
     Consulta a nuvem passando pelo cache.  Falhas (analise_incompleta) nunca
     ficam guardadas.  Devolve (resultado, veio_do_cache).
+    ao_concluir_agente é repassado para _consultar_nuvem_cached e de lá para
+    chamar_guardiao, mas não entra na chave de cache.
     """
     if ignorar_cache:
         _consultar_nuvem_cached.clear(regiao_id, fonte)
     inicio_ns = time.perf_counter_ns()
-    resultado = _consultar_nuvem_cached(regiao_id, fonte)
+    resultado = _consultar_nuvem_cached(
+        regiao_id, fonte, _ao_concluir_agente=ao_concluir_agente
+    )
     if resultado.get("status") == "analise_incompleta":
         _consultar_nuvem_cached.clear(regiao_id, fonte)
     return resultado, resultado.get("_consulta_ns", inicio_ns) < inicio_ns
@@ -261,7 +283,7 @@ def _secao_selecao():
     with col_btn:
         st.write("")
         st.write("")
-        executar = st.button("▶ Executar Conselho", type="primary", use_container_width=True)
+        executar = st.button("▶ Executar Conselho", type="primary", width="stretch")
 
     return selecionado, regioes, executar
 
@@ -287,7 +309,7 @@ def _secao_indicadores(regiao_id: str):
                 {"Indicador": k, "Valor": _formatar_valor(v)}
                 for k, v in secao.items()
             ]
-            st.dataframe(tabela, use_container_width=True, hide_index=True)
+            st.dataframe(tabela, width="stretch", hide_index=True)
 
 
 def _card_agente(nome_chave: str, parecer: dict):
@@ -364,7 +386,7 @@ def _grafico_radar(pareceres: dict):
         margin=dict(t=20, b=20, l=20, r=20),
         height=320,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 # ---------------------------------------------------------------------------
@@ -604,7 +626,7 @@ def _grafico_ranking(ranking: list[dict]):
         height=max(180, 50 * len(ranking)),
         showlegend=False,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 def _secao_historico():
@@ -632,7 +654,7 @@ def _secao_historico():
                 "Score": item.get("score_consolidado", 0),
                 "Recomendação": _LABELS_RECOMENDACAO.get(rec, rec),
             })
-        st.dataframe(dados_tabela, use_container_width=True, hide_index=True)
+        st.dataframe(dados_tabela, width="stretch", hide_index=True)
     else:
         st.info("Nenhuma análise concluída com recomendação disponível no ranking.")
 
@@ -694,7 +716,9 @@ def render():
                     agentes_status[nome] = (sucesso, tempo)
 
                 try:
-                    resultado, veio_do_cache = _consultar_nuvem(regiao_id, fonte)
+                    resultado, veio_do_cache = _consultar_nuvem(
+                        regiao_id, fonte, ao_concluir_agente=_ao_concluir_agente
+                    )
                     # Se veio do cache o callback não dispara — mostra mensagem adequada
                     if veio_do_cache:
                         status_container.write("📦 Resultado carregado do cache.")

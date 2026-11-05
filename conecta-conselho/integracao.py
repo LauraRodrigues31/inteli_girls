@@ -211,7 +211,8 @@ def _consolidar_nuvem(
 
     Args:
         regiao_id: Identificador da região.
-        ao_concluir_agente: Callback opcional chamado quando cada agente termina.
+        ao_concluir_agente: Callback opcional chamado na thread principal quando
+            cada agente termina.
             Assinatura: ao_concluir_agente(nome: str, sucesso: bool, tempo: float)
             onde nome é o nome amigável do agente, sucesso indica se não houve
             erro, e tempo é o tempo em segundos. Comportamento sem callback não
@@ -225,88 +226,58 @@ def _consolidar_nuvem(
     # Lê IDs do .env / os.environ uma única vez (evita re-leitura por thread)
     ids_agentes = _ler_ids_agentes()
 
-    def _chamar_agente(chave: str) -> tuple[str, dict]:
-        """Chama um agente na nuvem e retorna (chave, parecer_dict)."""
+    def _chamar_agente(chave: str) -> tuple[str, dict, bool, float]:
+        """
+        Chama um agente na nuvem e retorna (chave, parecer_dict, sucesso, tempo).
+        O callback NÃO é chamado aqui — é responsabilidade da thread principal
+        para que o Streamlit possa atualizar a tela sem conflito de threads.
+        """
         t_agente = time.monotonic()
         env_var = _AGENTE_ENV[chave]
         agent_id = ids_agentes.get(env_var, "").strip()
         if not agent_id:
-            parecer = {
+            return chave, {
                 "score": 0,
                 "confianca": "nao_avaliada",
                 "justificativa": "",
                 "riscos": [],
                 "erro": f"ID do agente '{chave}' não configurado (variável {env_var} ausente).",
-            }
-            if ao_concluir_agente is not None:
-                ao_concluir_agente(
-                    _NOMES_AMIGAVEIS_AGENTES.get(chave, chave),
-                    False,
-                    round(time.monotonic() - t_agente, 2),
-                )
-            return chave, parecer
+            }, False, round(time.monotonic() - t_agente, 2)
         try:
             resposta = cliente_nuvem.chamar_agente(
                 agent_id, f"Analise a região {regiao_id}"
             )
             # chamar_agente devolve {"erro": ...} em vez de levantar excepção
             if "erro" in resposta:
-                parecer = {
+                return chave, {
                     "score": 0,
                     "confianca": "nao_avaliada",
                     "justificativa": "",
                     "riscos": [],
                     "erro": resposta["erro"],
-                }
-                if ao_concluir_agente is not None:
-                    ao_concluir_agente(
-                        _NOMES_AMIGAVEIS_AGENTES.get(chave, chave),
-                        False,
-                        round(time.monotonic() - t_agente, 2),
-                    )
-                return chave, parecer
+                }, False, round(time.monotonic() - t_agente, 2)
             conteudo = resposta["choices"][0]["message"]["content"]
             parecer = cliente_nuvem.extrair_json(conteudo)
             # extrair_json devolve {"erro": "..."} quando não consegue parsear.
             # Verificamos o valor (truthy) para não confundir com {"erro": None}
             # que é um campo legítimo nos pareceres dos agentes.
             if parecer.get("erro"):
-                parecer_erro = {
+                return chave, {
                     "score": 0,
                     "confianca": "nao_avaliada",
                     "justificativa": "",
                     "riscos": [],
                     "erro": parecer["erro"],
-                }
-                if ao_concluir_agente is not None:
-                    ao_concluir_agente(
-                        _NOMES_AMIGAVEIS_AGENTES.get(chave, chave),
-                        False,
-                        round(time.monotonic() - t_agente, 2),
-                    )
-                return chave, parecer_erro
-            if ao_concluir_agente is not None:
-                ao_concluir_agente(
-                    _NOMES_AMIGAVEIS_AGENTES.get(chave, chave),
-                    True,
-                    round(time.monotonic() - t_agente, 2),
-                )
-            return chave, parecer
+                }, False, round(time.monotonic() - t_agente, 2)
+            return chave, parecer, True, round(time.monotonic() - t_agente, 2)
         except Exception as exc:  # noqa: BLE001
-            parecer_exc = {
+            return chave, {
                 "score": 0,
                 "confianca": "nao_avaliada",
                 "justificativa": "",
                 "riscos": [],
                 "erro": f"Falha ao chamar agente '{chave}': {exc}",
-            }
-            if ao_concluir_agente is not None:
-                ao_concluir_agente(
-                    _NOMES_AMIGAVEIS_AGENTES.get(chave, chave),
-                    False,
-                    round(time.monotonic() - t_agente, 2),
-                )
-            return chave, parecer_exc
+            }, False, round(time.monotonic() - t_agente, 2)
 
     pareceres_brutos: dict = {}
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -314,9 +285,16 @@ def _consolidar_nuvem(
             executor.submit(_chamar_agente, chave): chave
             for chave in _AGENTE_ENV
         }
+        # O loop roda na thread principal — seguro para chamar o Streamlit
         for futuro in as_completed(futuros):
-            chave, parecer = futuro.result()
+            chave, parecer, sucesso, tempo = futuro.result()
             pareceres_brutos[chave] = parecer
+            if ao_concluir_agente is not None:
+                ao_concluir_agente(
+                    _NOMES_AMIGAVEIS_AGENTES.get(chave, chave),
+                    sucesso,
+                    tempo,
+                )
 
     # Consolida localmente — mesma lógica do modo local
     resultado = _desempacotar(

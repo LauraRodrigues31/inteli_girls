@@ -9,6 +9,8 @@ Verifica:
   (e) Callback não é chamado quando ao_concluir_agente=None (comportamento padrão).
   (f) Callback recebe o nome amigável correto (não a chave interna).
   (g) Tempo passado ao callback é um float >= 0.
+  (h) Callback é chamado na thread principal (threading.get_ident()), não dentro
+      das threads do ThreadPoolExecutor — garantia de compatibilidade com Streamlit.
 
 AVISO: Nenhum teste acessa a internet — todos os calls de rede são mockados.
 """
@@ -323,3 +325,52 @@ class TestCallbackViaCharmarGuardiao:
         integracao.chamar_guardiao("aurora", fonte="local", ao_concluir_agente=callback)
 
         callback.assert_not_called()
+
+
+class TestCallbackThreadPrincipal:
+    """
+    Confirma que o callback é chamado na mesma thread de quem chamou
+    _consolidar_nuvem / chamar_guardiao (a thread principal), não dentro
+    das threads do ThreadPoolExecutor.
+    """
+
+    def test_callback_roda_na_mesma_thread(self, env_com_ids):
+        import threading
+        import integracao
+
+        thread_chamadora = threading.get_ident()
+        threads_do_callback: list[int] = []
+
+        def _cb(nome: str, sucesso: bool, tempo: float):
+            threads_do_callback.append(threading.get_ident())
+
+        mock_cliente = _criar_mock_cliente_nuvem(_respostas_todos_ok())
+        with patch.dict("sys.modules", {"cliente_nuvem": mock_cliente}):
+            integracao._consolidar_nuvem("aurora", ao_concluir_agente=_cb)
+
+        assert len(threads_do_callback) == 5, (
+            f"Esperava 5 chamadas ao callback, recebeu {len(threads_do_callback)}"
+        )
+        for tid in threads_do_callback:
+            assert tid == thread_chamadora, (
+                f"Callback chamado em thread {tid}, "
+                f"esperava thread principal {thread_chamadora}"
+            )
+
+    def test_callback_via_chamar_guardiao_thread_principal(self, env_com_ids):
+        import threading
+        import integracao
+
+        thread_chamadora = threading.get_ident()
+        threads_do_callback: list[int] = []
+
+        def _cb(nome: str, sucesso: bool, tempo: float):
+            threads_do_callback.append(threading.get_ident())
+
+        mock_cliente = _criar_mock_cliente_nuvem(_respostas_todos_ok())
+        with patch.dict("sys.modules", {"cliente_nuvem": mock_cliente}):
+            integracao.chamar_guardiao("aurora", fonte="nuvem", ao_concluir_agente=_cb)
+
+        assert len(threads_do_callback) == 5
+        for tid in threads_do_callback:
+            assert tid == thread_chamadora
