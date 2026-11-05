@@ -116,7 +116,30 @@ python -m streamlit run conecta-conselho/app.py
 
 (com o ambiente virtual ativo; abrir fora do venv causa erro de módulo do ADK)
 
-Modo padrão: local (cálculos determinísticos, sem nuvem).
+Fonte dos pareceres (barra lateral):
+
+- **IBM watsonx Orchestrate**: vira o padrão quando `WXO_URL`, `WXO_API_KEY` e os 5 `CC_AGENT_ID_*` estão definidos. Resultados da nuvem ficam em cache por 6 h por região; o botão **🔄 Consultar a IBM novamente** ignora o cache. Análises incompletas nunca ficam em cache.
+- **Local**: cálculos determinísticos sem nuvem. É o padrão quando faltam credenciais ou IDs, e o plano B se a nuvem falhar (botão **🖥️ Analisar no modo Local**).
+
+As variáveis são lidas primeiro do ambiente do processo e depois do `.env` na raiz.
+
+### Deploy no Streamlit Cloud
+
+1. Em *Create app*, aponte para este repositório, branch `main` e arquivo `conecta-conselho/app.py`.
+2. Em *Advanced settings*, escolha **Python 3.12**.
+3. Em *Secrets*, cole as variáveis no nível raiz do TOML (o Streamlit as expõe como variáveis de ambiente):
+
+```toml
+WXO_URL = "https://..."
+WXO_API_KEY = "..."
+CC_AGENT_ID_MERCADO = "..."
+CC_AGENT_ID_SOCIAL = "..."
+CC_AGENT_ID_ENGENHARIA = "..."
+CC_AGENT_ID_ORCAMENTO = "..."
+CC_AGENT_ID_PONTES = "..."
+```
+
+Sem os Secrets, o app sobe normalmente no modo Local.
 
 ---
 
