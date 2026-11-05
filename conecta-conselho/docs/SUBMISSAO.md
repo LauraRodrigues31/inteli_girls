@@ -61,7 +61,7 @@ IBM Bob was central to every development phase of Conecta Conselho. We used the 
 - **Self-contained tool generator:** Bob designed and implemented `scripts/gerar_ferramenta_nuvem.py`, which embeds `regioes.json` as a Python dictionary inside the tool file, eliminating `ModuleNotFoundError` in the cloud runtime's isolated execution environment.
 - **Publication and test scripts:** Bob created `scripts/publicar_agente.ps1` (PowerShell) and `scripts/testar_agente_nuvem.py`, which discover the agent ID dynamically via `orchestrate agents list -v` and test any agent against the IBM runtime API without hardcoding UUIDs or credentials.
 - **Streamlit integration:** Bob implemented the multi-source integration layer (`integracao.py`, `cliente_nuvem.py`) that calls the five agents in parallel using a `ThreadPoolExecutor` (5 concurrent calls), consolidates results locally, and presents two modes the user explicitly chooses between: **IBM watsonx Orchestrate** and **Local** (the demo's plan B).
-- **Test coverage:** Bob authored and maintained the automated test suite, which currently counts **883 passing tests** covering all agent tools, the Guardian, integration mocks, and the Streamlit interface.
+- **Test coverage:** Bob authored and maintained the automated test suite, which currently counts **more than 880 passing tests** covering all agent tools, the Guardian, integration mocks, and the Streamlit interface.
 
 **IBM watsonx Orchestrate**
 
@@ -74,7 +74,7 @@ IBM Bob was central to every development phase of Conecta Conselho. We used the 
 
 **Other technologies**
 
-- Python 3.12, Streamlit (multi-page with `st.navigation`), Plotly (radar chart, bar chart, map), pytest (883 tests), GitHub (branch-per-feature, PR to `develop`, Laura merges and releases to `main`).
+- Python 3.12, Streamlit (multi-page with `st.navigation`), Plotly (scenario comparison chart in the Simulator), pytest (880+ tests), GitHub (branch-per-feature, PR to `develop`, Laura merges and releases to `main`).
 
 ---
 
@@ -90,7 +90,7 @@ O IBM Bob foi central em todas as fases de desenvolvimento do Conecta Conselho. 
 - **Gerador de ferramentas autocontidas:** o Bob projetou e implementou `scripts/gerar_ferramenta_nuvem.py`, que embute `regioes.json` como dicionário Python dentro do arquivo da ferramenta, eliminando o `ModuleNotFoundError` no ambiente de execução isolado do runtime em nuvem.
 - **Scripts de publicação e teste:** o Bob criou `scripts/publicar_agente.ps1` (PowerShell) e `scripts/testar_agente_nuvem.py`, que descobrem o ID do agente dinamicamente via `orchestrate agents list -v` e testam qualquer agente contra a API de runtime da IBM sem hardcode de UUIDs ou credenciais.
 - **Integração com o Streamlit:** o Bob implementou a camada de integração multi-fonte (`integracao.py`, `cliente_nuvem.py`) que chama os cinco agentes em paralelo usando um `ThreadPoolExecutor` (5 chamadas simultâneas), consolida os resultados localmente e apresenta dois modos que o usuário escolhe explicitamente: **IBM watsonx Orchestrate** e **Local** (plano B da demo).
-- **Cobertura de testes:** o Bob escreveu e manteve a suíte de testes automatizados, que atualmente conta com **883 testes passando**, cobrindo todas as ferramentas dos agentes, o Guardião, mocks de integração e a interface Streamlit.
+- **Cobertura de testes:** o Bob escreveu e manteve a suíte de testes automatizados, que atualmente conta com **mais de 880 testes passando**, cobrindo todas as ferramentas dos agentes, o Guardião, mocks de integração e a interface Streamlit.
 
 **IBM watsonx Orchestrate**
 
@@ -103,7 +103,7 @@ O IBM Bob foi central em todas as fases de desenvolvimento do Conecta Conselho. 
 
 **Outras tecnologias**
 
-Python 3.12, Streamlit (multi-página com `st.navigation`), Plotly (gráfico radar, barras, mapa), pytest (883 testes), GitHub (branch por funcionalidade, PR para `develop`, Laura faz merges e release para `main`).
+Python 3.12, Streamlit (multi-página com `st.navigation`), Plotly (gráfico de comparação de cenários no Simulador), pytest (mais de 880 testes), GitHub (branch por funcionalidade, PR para `develop`, Laura faz merges e release para `main`).
 
 ---
 
