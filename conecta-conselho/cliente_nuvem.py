@@ -1,6 +1,9 @@
 """
 Camada de conexão com o IBM watsonx Orchestrate (modo nuvem).
 
+AVISO: Todos os dados processados por este módulo são SIMULADOS e FICTÍCIOS.
+Nenhum indicador representa região, operadora ou instituição real.
+
 Funções públicas
 ----------------
 carregar_credenciais() -> dict
