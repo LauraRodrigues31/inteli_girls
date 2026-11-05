@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Resolve imports independente do diretório de execução
+# Resolve imports independente do diretório de execução (Linux-safe, sem \)
 # ---------------------------------------------------------------------------
 _CC_DIR = Path(__file__).resolve().parent.parent
 _ROOT   = _CC_DIR.parent
@@ -33,24 +34,44 @@ from integracao import chamar_guardiao, _verificar_credenciais_nuvem  # type: ig
 
 _AVISO_SIMULADO = "⚠️ Dados simulados — não representam indicadores reais."
 
+# Rótulos amigáveis e curtos para exibição no cartão
 _LABELS_RECOMENDACAO = {
-    "investir_agora":  "✅ Investir Agora",
-    "realizar_piloto": "🔬 Realizar Piloto",
-    "aguardar":        "⏳ Aguardar",
+    "investir_agora":  "Investir agora",
+    "realizar_piloto": "Começar com piloto",
+    "aguardar":        "Aguardar",
 }
 
+# Cores CSS/Streamlit por recomendação (itens 1 e 7)
 _CORES_RECOMENDACAO = {
-    "investir_agora":  "green",
-    "realizar_piloto": "blue",
+    "investir_agora":  "blue",
+    "realizar_piloto": "green",
     "aguardar":        "orange",
 }
 
+# Cores hex para o gráfico de barras (item 7)
+_CORES_HEX = {
+    "investir_agora":  "#3b82f6",   # azul
+    "realizar_piloto": "#22c55e",   # verde
+    "aguardar":        "#f59e0b",   # amarelo
+    "analise_incompleta": "#9ca3af", # cinza
+}
+
+# Nomes amigáveis com pergunta de cada agente (item 8)
 _NOMES_AGENTES = {
-    "mercado":        "🏪 Mercado",
-    "impacto_social": "🫂 Impacto Social",
-    "engenharia":     "⚙️ Engenharia",
-    "orcamento":      "💰 Orçamento",
-    "pontes":         "🤝 Pontes",
+    "mercado":        "🏪 Mercado — Tem demanda?",
+    "impacto_social": "🫂 Impacto Social — Quem se beneficia?",
+    "engenharia":     "⚙️ Engenharia — Dá para construir?",
+    "orcamento":      "💰 Orçamento — Cabe no budget?",
+    "pontes":         "🤝 Pontes — Há parceiros?",
+}
+
+# Rótulos curtos para o gráfico radar (sem emoji nem pergunta)
+_NOMES_RADAR = {
+    "mercado":        "Mercado",
+    "impacto_social": "Impacto Social",
+    "engenharia":     "Engenharia",
+    "orcamento":      "Orçamento",
+    "pontes":         "Pontes",
 }
 
 _SECOES_INDICADORES = {
@@ -60,6 +81,65 @@ _SECOES_INDICADORES = {
     "Financeiro":  "financeiro",
     "Parcerias":   "parcerias",
 }
+
+# TTL do cache de resultados da nuvem (em segundos)
+_CACHE_TTL_SEGUNDOS = 6 * 60 * 60  # 6 horas
+
+# ---------------------------------------------------------------------------
+# Cache de resultados da nuvem (st.cache_data com TTL de 6 horas)
+# ---------------------------------------------------------------------------
+
+
+@st.cache_data(ttl=_CACHE_TTL_SEGUNDOS, show_spinner=False)
+def _consultar_nuvem_cached(
+    regiao_id: str,
+    fonte: str,
+    _ao_concluir_agente=None,  # prefixo "_" faz st.cache_data ignorar na chave
+) -> dict:
+    """
+    Executa chamar_guardiao no modo nuvem e armazena o resultado em cache.
+    Chave de cache = (regiao_id, fonte).  TTL = 6 horas.
+    _ao_concluir_agente é ignorado na chave de cache (prefixo "_") mas
+    repassado para chamar_guardiao para disparar o st.status em tempo real.
+    Devolve sempre uma cópia com os campos:
+      - "consultado_em"  = time.time()        (usado na exibição)
+      - "_consulta_ns"   = time.perf_counter_ns()  (usado na detecção de cache)
+    """
+    resultado = dict(
+        chamar_guardiao(
+            regiao_id,
+            fonte=fonte,
+            ao_concluir_agente=_ao_concluir_agente,
+        )
+    )
+    resultado["consultado_em"] = time.time()
+    resultado["_consulta_ns"] = time.perf_counter_ns()
+    return resultado
+
+
+def _consultar_nuvem(
+    regiao_id: str,
+    fonte: str,
+    *,
+    ignorar_cache: bool = False,
+    ao_concluir_agente=None,
+) -> tuple[dict, bool]:
+    """
+    Consulta a nuvem passando pelo cache.  Falhas (analise_incompleta) nunca
+    ficam guardadas.  Devolve (resultado, veio_do_cache).
+    ao_concluir_agente é repassado para _consultar_nuvem_cached e de lá para
+    chamar_guardiao, mas não entra na chave de cache.
+    """
+    if ignorar_cache:
+        _consultar_nuvem_cached.clear(regiao_id, fonte)
+    inicio_ns = time.perf_counter_ns()
+    resultado = _consultar_nuvem_cached(
+        regiao_id, fonte, _ao_concluir_agente=ao_concluir_agente
+    )
+    if resultado.get("status") == "analise_incompleta":
+        _consultar_nuvem_cached.clear(regiao_id, fonte)
+    return resultado, resultado.get("_consulta_ns", inicio_ns) < inicio_ns
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -94,6 +174,17 @@ def _formatar_valor(v) -> str:
     if v is None:
         return "—"
     return str(v)
+
+
+def _credenciais_e_ids_disponiveis() -> bool:
+    """
+    Retorna True se as credenciais WXO e os 5 IDs de agente estiverem
+    disponíveis (em os.environ ou .env).  Usado para definir a fonte padrão.
+    """
+    from cliente_nuvem import carregar_credenciais  # type: ignore[import]
+    creds_ok = "erro" not in carregar_credenciais()
+    ids_ok, _ = _verificar_credenciais_nuvem()
+    return creds_ok and ids_ok
 
 
 def _inicializar_estado():
@@ -132,12 +223,29 @@ def _ranking() -> list[dict]:
 
 
 def _seletor_fonte() -> str:
+    """
+    Exibe o seletor de fonte na barra lateral.
+
+    Fonte padrão:
+    - "IBM watsonx Orchestrate" se as credenciais e os 5 IDs estiverem disponíveis.
+    - "Local" caso contrário, com um aviso discreto.
+    """
     with st.sidebar:
         st.header("⚙️ Configurações")
+
+        nuvem_disponivel = _credenciais_e_ids_disponiveis()
+        indice_padrao = 1 if nuvem_disponivel else 0  # 0=Local, 1=IBM watsonx
+
+        if not nuvem_disponivel:
+            st.caption(
+                "ℹ️ Credenciais ou IDs de agente não configurados — "
+                "fonte padrão: Local."
+            )
+
         opcao = st.radio(
             "Fonte dos pareceres:",
             options=["Local", "IBM watsonx Orchestrate"],
-            index=0,
+            index=indice_padrao,
             key="seletor_fonte",
         )
         fonte_escolhida = "nuvem" if opcao == "IBM watsonx Orchestrate" else "local"
@@ -175,7 +283,7 @@ def _secao_selecao():
     with col_btn:
         st.write("")
         st.write("")
-        executar = st.button("▶ Executar Conselho", type="primary", use_container_width=True)
+        executar = st.button("▶ Executar Conselho", type="primary", width="stretch")
 
     return selecionado, regioes, executar
 
@@ -201,7 +309,7 @@ def _secao_indicadores(regiao_id: str):
                 {"Indicador": k, "Valor": _formatar_valor(v)}
                 for k, v in secao.items()
             ]
-            st.dataframe(tabela, use_container_width=True, hide_index=True)
+            st.dataframe(tabela, width="stretch", hide_index=True)
 
 
 def _card_agente(nome_chave: str, parecer: dict):
@@ -241,15 +349,116 @@ def _card_agente(nome_chave: str, parecer: dict):
                         st.markdown(f"- {lim}")
 
 
-def _secao_resultado(resultado: dict):
+# ---------------------------------------------------------------------------
+# Gráfico radar — item 3
+# ---------------------------------------------------------------------------
+
+
+def _grafico_radar(pareceres: dict):
+    """Renderiza gráfico Scatterpolar Plotly com os 5 scores (0-100)."""
+    try:
+        import plotly.graph_objects as go  # type: ignore[import]
+    except ImportError:
+        st.caption("plotly não disponível — gráfico radar omitido.")
+        return
+
+    ordem = ["mercado", "impacto_social", "engenharia", "orcamento", "pontes"]
+    categorias = [_NOMES_RADAR.get(k, k) for k in ordem]
+    valores = [pareceres.get(k, {}).get("score", 0) for k in ordem]
+    # Fecha o polígono repetindo o primeiro ponto
+    categorias_fechadas = categorias + [categorias[0]]
+    valores_fechados = valores + [valores[0]]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(
+        r=valores_fechados,
+        theta=categorias_fechadas,
+        fill="toself",
+        fillcolor="rgba(59, 130, 246, 0.15)",
+        line=dict(color="#3b82f6", width=2),
+        name="Scores",
+    ))
+    fig.update_layout(
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 100], tickfont=dict(size=10)),
+        ),
+        showlegend=False,
+        margin=dict(t=20, b=20, l=20, r=20),
+        height=320,
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
+# ---------------------------------------------------------------------------
+# Cartão de resultado (item 1) + alerta (item 2)
+# ---------------------------------------------------------------------------
+
+
+def _cartao_recomendacao(resultado: dict):
+    """
+    Exibe o cartão visual de resultado:
+    - Cor de fundo por recomendação (verde/azul/amarelo/cinza)
+    - Score grande
+    - Rótulo amigável
+    - Alerta de atenção prioritária (item 2)
+    """
+    score_cons   = resultado.get("score_consolidado", 0)
+    recomendacao = resultado.get("recomendacao", "aguardar")
+    label_rec    = _LABELS_RECOMENDACAO.get(recomendacao, recomendacao)
+    cor_rec      = _CORES_RECOMENDACAO.get(recomendacao, "gray")
+    hex_rec      = _CORES_HEX.get(recomendacao, "#9ca3af")
+
+    # Cartão colorido com score grande e recomendação
+    st.markdown(
+        f"""
+        <div style="
+            background:{hex_rec}1a;
+            border-left: 6px solid {hex_rec};
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 12px;
+        ">
+            <div style="font-size:48px; font-weight:800; color:{hex_rec}; line-height:1;">
+                {score_cons}<span style="font-size:22px; font-weight:400;">/100</span>
+            </div>
+            <div style="font-size:20px; font-weight:600; color:{hex_rec}; margin-top:4px;">
+                {label_rec}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Item 2 — alerta de atenção prioritária
+    if resultado.get("atencao_prioritaria"):
+        pontos_criticos = resultado.get("pontos_criticos", [])
+        linhas = ["⚠️ **Atenção Prioritária** — esta região requer cuidado especial."]
+        if pontos_criticos:
+            linhas.append("\n**Pontos críticos identificados:**")
+            for ponto in pontos_criticos:
+                linhas.append(f"- {ponto}")
+        st.error("\n".join(linhas))
+
+
+# ---------------------------------------------------------------------------
+# Seção de resultado completa (item 1-6)
+# ---------------------------------------------------------------------------
+
+
+def _secao_resultado(resultado: dict, *, veio_do_cache: bool = False):
     if not resultado:
         return
 
     status = resultado.get("status", "concluida")
+    fonte  = resultado.get("fonte", "local")
 
     st.divider()
     st.subheader("🤖 Análise dos Agentes Especialistas")
     st.caption(_AVISO_SIMULADO)
+
+    # Indicador de cache — exibido discretamente quando o resultado vem do cache
+    if veio_do_cache and fonte == "nuvem":
+        st.caption("📦 resultado em cache (IBM watsonx Orchestrate)")
 
     pareceres = resultado.get("pareceres", {})
     for nome_chave in ["mercado", "impacto_social", "engenharia", "orcamento", "pontes"]:
@@ -260,6 +469,23 @@ def _secao_resultado(resultado: dict):
     st.subheader("🛡️ Recomendação do Guardião")
 
     if status == "analise_incompleta":
+        # Cartão cinza para análise incompleta
+        st.markdown(
+            """
+            <div style="
+                background:#9ca3af1a;
+                border-left: 6px solid #9ca3af;
+                border-radius: 8px;
+                padding: 20px 24px;
+                margin-bottom: 12px;
+            ">
+                <div style="font-size:20px; font-weight:600; color:#6b7280;">
+                    Análise incompleta
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.error("⚠️ Análise incompleta — não é possível emitir recomendação.")
         agentes_com_falha = resultado.get("agentes_com_falha", [])
         if agentes_com_falha:
@@ -268,6 +494,28 @@ def _secao_resultado(resultado: dict):
                 nome = af.get("agente", "—")
                 motivo = af.get("motivo", "erro desconhecido")
                 st.markdown(f"- **{_NOMES_AGENTES.get(nome, nome)}**: {motivo}")
+
+        # Botão "Analisar no modo Local" quando a nuvem falhou
+        if fonte == "nuvem":
+            st.info(
+                "💡 A análise na nuvem terminou incompleta. "
+                "Você pode analisar esta região no modo Local."
+            )
+            regiao_id = resultado.get("regiao_id", "")
+            if st.button(
+                "🖥️ Analisar no modo Local",
+                key=f"fallback_local_{regiao_id}",
+            ):
+                with st.spinner(f"Analisando {regiao_id} no modo local..."):
+                    try:
+                        resultado_local = chamar_guardiao(regiao_id, fonte="local")
+                        st.session_state[f"resultado_{regiao_id}"] = resultado_local
+                        st.session_state[f"cache_{regiao_id}"] = False
+                        _registrar_historico(resultado_local)
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Erro no modo local: {exc}")
+
         st.divider()
         json_bytes = json.dumps(resultado, ensure_ascii=False, indent=2).encode("utf-8")
         st.download_button(
@@ -278,32 +526,22 @@ def _secao_resultado(resultado: dict):
         )
         return
 
-    score_cons = resultado.get("score_consolidado", 0)
-    recomendacao = resultado.get("recomendacao", "aguardar")
-    label_rec = _LABELS_RECOMENDACAO.get(recomendacao, recomendacao)
-    cor_rec = _CORES_RECOMENDACAO.get(recomendacao, "gray")
+    # Item 1 — cartão colorido com score e recomendação + item 2 alerta
+    _cartao_recomendacao(resultado)
 
-    col_sc, col_rec = st.columns([1, 2])
-    with col_sc:
-        st.metric("Score Consolidado", f"{score_cons} / 100")
-    with col_rec:
-        st.markdown(f"### :{cor_rec}[{label_rec}]")
-
-    if resultado.get("atencao_prioritaria"):
-        pontos_criticos = resultado.get("pontos_criticos", [])
-        aviso_linhas = ["🚨 **Atenção Prioritária** — esta região requer cuidado especial."]
-        if pontos_criticos:
-            aviso_linhas.append("\n**Pontos críticos identificados:**")
-            for ponto in pontos_criticos:
-                aviso_linhas.append(f"- {ponto}")
-        st.error("\n".join(aviso_linhas))
+    # Item 3 — gráfico radar
+    if pareceres:
+        st.markdown("#### 📡 Visão Geral dos Scores")
+        _grafico_radar(pareceres)
 
     just_cons = resultado.get("justificativa_consolidada", "")
     if just_cons:
         st.info(just_cons)
 
+    # Item 4 — Por que aguardar / Caminhos para viabilizar
+    recomendacao = resultado.get("recomendacao", "aguardar")
     if recomendacao == "aguardar":
-        motivos = resultado.get("motivos", [])
+        motivos  = resultado.get("motivos", [])
         caminhos = resultado.get("caminhos", [])
         if motivos:
             with st.expander("🔍 Por que aguardar", expanded=True):
@@ -314,9 +552,10 @@ def _secao_resultado(resultado: dict):
                 for c in caminhos:
                     st.markdown(f"- {c}")
 
+    # Item 5 — Divergências como conflitos entre especialistas
     divergencias = resultado.get("divergencias", [])
     if divergencias:
-        with st.expander(f"⚡ Divergências identificadas ({len(divergencias)})"):
+        with st.expander(f"⚖️ Conflitos entre especialistas ({len(divergencias)})"):
             for d in divergencias:
                 st.warning(d)
 
@@ -332,7 +571,6 @@ def _secao_resultado(resultado: dict):
             for lim in limitacoes_g:
                 st.caption(f"— {lim}")
 
-    fonte = resultado.get("fonte", "local")
     tempo = resultado.get("tempo_analise_segundos")
     fonte_label = "☁️ IBM watsonx Orchestrate" if fonte == "nuvem" else "💻 Local"
     if tempo is not None:
@@ -350,6 +588,47 @@ def _secao_resultado(resultado: dict):
     )
 
 
+# ---------------------------------------------------------------------------
+# Histórico com gráfico de barras horizontal (item 7)
+# ---------------------------------------------------------------------------
+
+
+def _grafico_ranking(ranking: list[dict]):
+    """Gráfico de barras horizontal com cor por recomendação (item 7)."""
+    try:
+        import plotly.graph_objects as go  # type: ignore[import]
+    except ImportError:
+        return
+
+    if not ranking:
+        return
+
+    nomes  = [item.get("regiao_nome", item.get("regiao_id", "—")) for item in ranking]
+    scores = [item.get("score_consolidado", 0) for item in ranking]
+    cores  = [_CORES_HEX.get(item.get("recomendacao", ""), "#9ca3af") for item in ranking]
+    labels = [_LABELS_RECOMENDACAO.get(item.get("recomendacao", ""), "—") for item in ranking]
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=scores,
+        y=nomes,
+        orientation="h",
+        marker=dict(color=cores),
+        text=[f"{s} — {l}" for s, l in zip(scores, labels)],
+        textposition="inside",
+        insidetextanchor="start",
+        hovertemplate="%{y}: %{x}/100<extra></extra>",
+    ))
+    fig.update_layout(
+        xaxis=dict(range=[0, 100], title="Score Consolidado"),
+        yaxis=dict(autorange="reversed"),
+        margin=dict(t=10, b=30, l=10, r=10),
+        height=max(180, 50 * len(ranking)),
+        showlegend=False,
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
 def _secao_historico():
     historico = st.session_state.historico
     if not historico:
@@ -363,6 +642,9 @@ def _secao_historico():
     st.caption("Regiões com análise incompleta não entram no ranking.")
 
     if ranking:
+        # Item 7 — gráfico de barras horizontal com cor por recomendação
+        _grafico_ranking(ranking)
+
         dados_tabela = []
         for pos, item in enumerate(ranking, start=1):
             rec = item.get("recomendacao", "—")
@@ -372,7 +654,7 @@ def _secao_historico():
                 "Score": item.get("score_consolidado", 0),
                 "Recomendação": _LABELS_RECOMENDACAO.get(rec, rec),
             })
-        st.dataframe(dados_tabela, use_container_width=True, hide_index=True)
+        st.dataframe(dados_tabela, width="stretch", hide_index=True)
     else:
         st.info("Nenhuma análise concluída com recomendação disponível no ranking.")
 
@@ -423,10 +705,26 @@ def render():
         _secao_indicadores(regiao_id)
 
         if executar:
-            with st.spinner(f"Executando o Conselho para {regiao_id}..."):
+            if fonte == "nuvem":
+                # Item 6 — st.status mostrando cada agente ao terminar
+                agentes_status: dict[str, tuple[bool, float]] = {}
+                status_container = st.status("Executando Conselho na nuvem...", expanded=True)
+
+                def _ao_concluir_agente(nome: str, sucesso: bool, tempo: float):
+                    icone = "✅" if sucesso else "❌"
+                    status_container.write(f"{icone} {nome} — {tempo:.1f} s")
+                    agentes_status[nome] = (sucesso, tempo)
+
                 try:
-                    resultado = chamar_guardiao(regiao_id, fonte=fonte)
+                    resultado, veio_do_cache = _consultar_nuvem(
+                        regiao_id, fonte, ao_concluir_agente=_ao_concluir_agente
+                    )
+                    # Se veio do cache o callback não dispara — mostra mensagem adequada
+                    if veio_do_cache:
+                        status_container.write("📦 Resultado carregado do cache.")
+                    status_container.update(label="Conselho concluído!", state="complete")
                     st.session_state[f"resultado_{regiao_id}"] = resultado
+                    st.session_state[f"cache_{regiao_id}"] = veio_do_cache
                     _registrar_historico(resultado)
                     if resultado.get("status") == "analise_incompleta":
                         st.warning("Análise incompleta — verifique os agentes com falha.")
@@ -435,11 +733,53 @@ def render():
                     else:
                         st.success(f"Análise concluída para {resultado.get('regiao_nome', regiao_id)}!")
                 except Exception as e:
+                    status_container.update(label="Erro no Conselho", state="error")
                     st.error(f"Erro inesperado: {e}")
+            else:
+                with st.spinner(f"Executando o Conselho para {regiao_id}..."):
+                    try:
+                        resultado = chamar_guardiao(regiao_id, fonte=fonte)
+                        veio_do_cache = False
+                        st.session_state[f"resultado_{regiao_id}"] = resultado
+                        st.session_state[f"cache_{regiao_id}"] = veio_do_cache
+                        _registrar_historico(resultado)
+                        if resultado.get("status") == "analise_incompleta":
+                            st.warning("Análise incompleta — verifique os agentes com falha.")
+                        elif resultado.get("erro"):
+                            st.error(f"Erro ao analisar região: {resultado['erro']}")
+                        else:
+                            st.success(f"Análise concluída para {resultado.get('regiao_nome', regiao_id)}!")
+                    except Exception as e:
+                        st.error(f"Erro inesperado: {e}")
 
         resultado_atual = st.session_state.get(f"resultado_{regiao_id}")
+
+        # Botão "Consultar a IBM novamente" — limpa cache só desta região e re-executa
+        if resultado_atual and resultado_atual.get("fonte") == "nuvem":
+            col_cache, _ = st.columns([2, 3])
+            with col_cache:
+                if st.button(
+                    "🔄 Consultar a IBM novamente",
+                    key=f"refetch_{regiao_id}",
+                    help="Ignora o cache e busca uma nova análise na nuvem.",
+                ):
+                    with st.spinner(f"Consultando a IBM para {regiao_id}..."):
+                        try:
+                            resultado_atual, veio_do_cache = _consultar_nuvem(
+                                regiao_id, "nuvem", ignorar_cache=True
+                            )
+                            st.session_state[f"resultado_{regiao_id}"] = resultado_atual
+                            st.session_state[f"cache_{regiao_id}"] = veio_do_cache
+                            _registrar_historico(resultado_atual)
+                            st.success("Nova consulta concluída!")
+                        except Exception as e:
+                            st.error(f"Erro ao reconsultar: {e}")
+
         if resultado_atual:
-            _secao_resultado(resultado_atual)
+            _secao_resultado(
+                resultado_atual,
+                veio_do_cache=st.session_state.get(f"cache_{regiao_id}", False),
+            )
 
     with aba_historico:
         st.caption(_AVISO_SIMULADO)
