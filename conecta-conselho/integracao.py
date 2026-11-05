@@ -187,13 +187,35 @@ def _verificar_credenciais_nuvem() -> tuple[bool, str]:
     return True, ""
 
 
-def _consolidar_nuvem(regiao_id: str) -> dict:
+# Nomes amigáveis dos agentes para uso no callback (item 6)
+_NOMES_AMIGAVEIS_AGENTES = {
+    "mercado":        "Mercado",
+    "impacto_social": "Impacto Social",
+    "engenharia":     "Engenharia",
+    "orcamento":      "Orçamento",
+    "pontes":         "Pontes",
+}
+
+
+def _consolidar_nuvem(
+    regiao_id: str,
+    *,
+    ao_concluir_agente=None,
+) -> dict:
     """
     Chama os 5 agentes IBM watsonx Orchestrate em paralelo via ThreadPoolExecutor.
     De cada resposta extrai choices[0].message.content e passa para extrair_json.
     Se um agente falhar (incluindo {"erro": ...} na resposta), monta parecer com
     "erro" preenchido. Consolida com consolidar_pareceres e devolve o mesmo
     formato do modo local.
+
+    Args:
+        regiao_id: Identificador da região.
+        ao_concluir_agente: Callback opcional chamado quando cada agente termina.
+            Assinatura: ao_concluir_agente(nome: str, sucesso: bool, tempo: float)
+            onde nome é o nome amigável do agente, sucesso indica se não houve
+            erro, e tempo é o tempo em segundos. Comportamento sem callback não
+            muda.
     """
     import importlib as _imp
     cliente_nuvem = _imp.import_module("cliente_nuvem")
@@ -205,51 +227,86 @@ def _consolidar_nuvem(regiao_id: str) -> dict:
 
     def _chamar_agente(chave: str) -> tuple[str, dict]:
         """Chama um agente na nuvem e retorna (chave, parecer_dict)."""
+        t_agente = time.monotonic()
         env_var = _AGENTE_ENV[chave]
         agent_id = ids_agentes.get(env_var, "").strip()
         if not agent_id:
-            return chave, {
+            parecer = {
                 "score": 0,
                 "confianca": "nao_avaliada",
                 "justificativa": "",
                 "riscos": [],
                 "erro": f"ID do agente '{chave}' não configurado (variável {env_var} ausente).",
             }
+            if ao_concluir_agente is not None:
+                ao_concluir_agente(
+                    _NOMES_AMIGAVEIS_AGENTES.get(chave, chave),
+                    False,
+                    round(time.monotonic() - t_agente, 2),
+                )
+            return chave, parecer
         try:
             resposta = cliente_nuvem.chamar_agente(
                 agent_id, f"Analise a região {regiao_id}"
             )
             # chamar_agente devolve {"erro": ...} em vez de levantar excepção
             if "erro" in resposta:
-                return chave, {
+                parecer = {
                     "score": 0,
                     "confianca": "nao_avaliada",
                     "justificativa": "",
                     "riscos": [],
                     "erro": resposta["erro"],
                 }
+                if ao_concluir_agente is not None:
+                    ao_concluir_agente(
+                        _NOMES_AMIGAVEIS_AGENTES.get(chave, chave),
+                        False,
+                        round(time.monotonic() - t_agente, 2),
+                    )
+                return chave, parecer
             conteudo = resposta["choices"][0]["message"]["content"]
             parecer = cliente_nuvem.extrair_json(conteudo)
             # extrair_json devolve {"erro": "..."} quando não consegue parsear.
             # Verificamos o valor (truthy) para não confundir com {"erro": None}
             # que é um campo legítimo nos pareceres dos agentes.
             if parecer.get("erro"):
-                return chave, {
+                parecer_erro = {
                     "score": 0,
                     "confianca": "nao_avaliada",
                     "justificativa": "",
                     "riscos": [],
                     "erro": parecer["erro"],
                 }
+                if ao_concluir_agente is not None:
+                    ao_concluir_agente(
+                        _NOMES_AMIGAVEIS_AGENTES.get(chave, chave),
+                        False,
+                        round(time.monotonic() - t_agente, 2),
+                    )
+                return chave, parecer_erro
+            if ao_concluir_agente is not None:
+                ao_concluir_agente(
+                    _NOMES_AMIGAVEIS_AGENTES.get(chave, chave),
+                    True,
+                    round(time.monotonic() - t_agente, 2),
+                )
             return chave, parecer
         except Exception as exc:  # noqa: BLE001
-            return chave, {
+            parecer_exc = {
                 "score": 0,
                 "confianca": "nao_avaliada",
                 "justificativa": "",
                 "riscos": [],
                 "erro": f"Falha ao chamar agente '{chave}': {exc}",
             }
+            if ao_concluir_agente is not None:
+                ao_concluir_agente(
+                    _NOMES_AMIGAVEIS_AGENTES.get(chave, chave),
+                    False,
+                    round(time.monotonic() - t_agente, 2),
+                )
+            return chave, parecer_exc
 
     pareceres_brutos: dict = {}
     with ThreadPoolExecutor(max_workers=5) as executor:
@@ -285,7 +342,12 @@ def _consolidar_nuvem(regiao_id: str) -> dict:
 # Ponto de entrada público
 # ---------------------------------------------------------------------------
 
-def chamar_guardiao(regiao_id: str, *, fonte: str | None = None) -> dict:
+def chamar_guardiao(
+    regiao_id: str,
+    *,
+    fonte: str | None = None,
+    ao_concluir_agente=None,
+) -> dict:
     """
     Camada de integração com o Agente Guardião.
 
@@ -299,6 +361,9 @@ def chamar_guardiao(regiao_id: str, *, fonte: str | None = None) -> dict:
     Args:
         regiao_id: Identificador da região (ex: 'aurora', 'central').
         fonte:     Sobrescreve CC_MODO quando fornecido ('local' | 'nuvem').
+        ao_concluir_agente: Callback opcional chamado ao fim de cada agente no
+            modo nuvem. Assinatura: ao_concluir_agente(nome, sucesso, tempo).
+            Ignorado no modo local. Comportamento sem callback não muda.
 
     Returns:
         Dicionário com pareceres dos 5 agentes e recomendação do Guardião,
@@ -309,7 +374,7 @@ def chamar_guardiao(regiao_id: str, *, fonte: str | None = None) -> dict:
 
     if modo_efetivo == "nuvem":
         t_inicio = time.monotonic()
-        resultado = _consolidar_nuvem(regiao_id)
+        resultado = _consolidar_nuvem(regiao_id, ao_concluir_agente=ao_concluir_agente)
         if "tempo_analise_segundos" not in resultado:
             resultado["tempo_analise_segundos"] = round(time.monotonic() - t_inicio, 2)
         return resultado
