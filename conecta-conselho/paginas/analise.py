@@ -685,6 +685,217 @@ def _secao_historico():
 
 
 # ---------------------------------------------------------------------------
+# Comparar regiões — helpers e seção principal
+# ---------------------------------------------------------------------------
+
+_ORDEM_RADAR = ["mercado", "impacto_social", "engenharia", "orcamento", "pontes"]
+
+# Cores distintas para as duas séries do radar duplo
+_COR_SERIE_A = "#3b82f6"   # azul
+_COR_SERIE_B = "#f59e0b"   # amarelo-âmbar
+
+
+def _analisar_para_comparar(regiao_id: str, fonte: str) -> dict:
+    """
+    Executa chamar_guardiao para a região no modo correto (local ou nuvem com cache).
+    Usado pela seção de comparação — sem spinner, sem registro no histórico.
+    Retorna o dict de resultado ou {"erro": ...} em caso de falha.
+    """
+    try:
+        if fonte == "nuvem":
+            resultado, _ = _consultar_nuvem(regiao_id, fonte)
+        else:
+            resultado = chamar_guardiao(regiao_id, fonte=fonte)
+        return resultado
+    except Exception as exc:  # noqa: BLE001
+        return {"erro": str(exc), "regiao_id": regiao_id}
+
+
+def _mini_card_comparar(resultado: dict):
+    """
+    Exibe um mini-cartão colorido para a seção de comparação:
+    - Score grande + recomendação amigável
+    - Alerta ⚠️ com pontos_criticos quando atencao_prioritaria
+    - Tabela de scores por agente
+    """
+    if resultado.get("erro"):
+        st.error(f"Erro ao analisar região: {resultado['erro']}")
+        return
+    if resultado.get("status") == "analise_incompleta":
+        st.warning("⚠️ Análise incompleta — resultado parcial.")
+
+    score_cons   = resultado.get("score_consolidado") or 0
+    recomendacao = resultado.get("recomendacao", "aguardar")
+    label_rec    = _LABELS_RECOMENDACAO.get(recomendacao, recomendacao)
+    hex_rec      = _CORES_HEX.get(recomendacao, "#9ca3af")
+
+    st.markdown(
+        f"""
+        <div style="
+            background:{hex_rec}1a;
+            border-left:5px solid {hex_rec};
+            border-radius:8px;
+            padding:14px 18px;
+            margin-bottom:10px;
+        ">
+            <div style="font-size:40px;font-weight:800;color:{hex_rec};line-height:1;">
+                {score_cons}<span style="font-size:18px;font-weight:400;">/100</span>
+            </div>
+            <div style="font-size:16px;font-weight:600;color:{hex_rec};margin-top:4px;">
+                {label_rec}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if resultado.get("atencao_prioritaria"):
+        pontos = resultado.get("pontos_criticos", [])
+        linhas = ["⚠️ **Atenção Prioritária**"]
+        for p in pontos:
+            linhas.append(f"- {p}")
+        st.error("\n".join(linhas))
+
+    # Tabela compacta de scores por agente
+    pareceres = resultado.get("pareceres", {})
+    if pareceres:
+        rows = []
+        for chave in _ORDEM_RADAR:
+            score_ag = pareceres.get(chave, {}).get("score", "—")
+            nome_ag  = _NOMES_RADAR.get(chave, chave)
+            rows.append({"Agente": nome_ag, "Score": score_ag})
+        st.dataframe(rows, hide_index=True, width="stretch")
+
+
+def _radar_duplo(
+    pareceres_a: dict,
+    pareceres_b: dict,
+    nome_a: str,
+    nome_b: str,
+):
+    """
+    Gráfico Scatterpolar com duas séries sobrepostas (região A e região B).
+    """
+    try:
+        import plotly.graph_objects as go  # type: ignore[import]
+    except ImportError:
+        st.caption("plotly não disponível — gráfico radar omitido.")
+        return
+
+    categorias = [_NOMES_RADAR.get(k, k) for k in _ORDEM_RADAR]
+    cat_fechadas = categorias + [categorias[0]]
+
+    def _valores(pareceres: dict) -> list[int]:
+        vals = [pareceres.get(k, {}).get("score", 0) for k in _ORDEM_RADAR]
+        return vals + [vals[0]]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatterpolar(
+        r=_valores(pareceres_a),
+        theta=cat_fechadas,
+        fill="toself",
+        fillcolor=f"{_COR_SERIE_A}26",
+        line=dict(color=_COR_SERIE_A, width=2),
+        name=nome_a,
+    ))
+    fig.add_trace(go.Scatterpolar(
+        r=_valores(pareceres_b),
+        theta=cat_fechadas,
+        fill="toself",
+        fillcolor=f"{_COR_SERIE_B}26",
+        line=dict(color=_COR_SERIE_B, width=2),
+        name=nome_b,
+    ))
+    fig.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0, 100], tickfont=dict(size=10))),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5),
+        margin=dict(t=20, b=60, l=20, r=20),
+        height=360,
+    )
+    st.plotly_chart(fig, width="stretch")
+
+
+def _secao_comparar(fonte: str):
+    """
+    Seção "Comparar regiões": dois selectboxes + botão "Comparar".
+    Mostra lado a lado: mini-card (score, recomendação, alerta, scores por agente)
+    e um radar duplo sobreposto.
+    Fonte padrão: "local" (rápido, sem gastar IBM); aceita "nuvem" com cache.
+    """
+    regioes   = listar_regioes()
+    ids       = [r["id"] for r in regioes]
+    opcoes    = {r["id"]: r["nome"] for r in regioes}
+
+    # Garante seleção padrão diferente entre A e B
+    idx_b_padrao = 1 if len(ids) > 1 else 0
+
+    col_a, col_b, col_btn = st.columns([2, 2, 1])
+    with col_a:
+        id_a = st.selectbox(
+            "Região A:",
+            options=ids,
+            format_func=lambda x: opcoes[x],
+            index=0,
+            key="comparar_regiao_a",
+        )
+    with col_b:
+        id_b = st.selectbox(
+            "Região B:",
+            options=ids,
+            format_func=lambda x: opcoes[x],
+            index=idx_b_padrao,
+            key="comparar_regiao_b",
+        )
+    with col_btn:
+        st.write("")
+        st.write("")
+        comparar = st.button("⚖️ Comparar", type="primary", width="stretch", key="btn_comparar")
+
+    if id_a == id_b:
+        st.info("ℹ️ Selecione duas regiões diferentes para comparar.")
+
+    if comparar:
+        fonte_comp = "local"  # comparação usa Local por padrão — rápido
+        with st.spinner("Analisando as duas regiões..."):
+            res_a = _analisar_para_comparar(id_a, fonte_comp)
+            res_b = _analisar_para_comparar(id_b, fonte_comp)
+        st.session_state["comparar_res_a"] = res_a
+        st.session_state["comparar_res_b"] = res_b
+        st.session_state["comparar_id_a"]  = id_a
+        st.session_state["comparar_id_b"]  = id_b
+
+    res_a = st.session_state.get("comparar_res_a")
+    res_b = st.session_state.get("comparar_res_b")
+    id_a_exib = st.session_state.get("comparar_id_a", id_a)
+    id_b_exib = st.session_state.get("comparar_id_b", id_b)
+
+    if not res_a or not res_b:
+        return
+
+    nome_a = res_a.get("regiao_nome") or opcoes.get(id_a_exib, id_a_exib)
+    nome_b = res_b.get("regiao_nome") or opcoes.get(id_b_exib, id_b_exib)
+
+    st.divider()
+
+    # Lado a lado
+    col_esq, col_dir = st.columns(2)
+    with col_esq:
+        st.markdown(f"### {nome_a}")
+        _mini_card_comparar(res_a)
+    with col_dir:
+        st.markdown(f"### {nome_b}")
+        _mini_card_comparar(res_b)
+
+    # Radar duplo sobreposto
+    st.markdown("#### 📡 Radar Comparativo")
+    pareceres_a = res_a.get("pareceres", {})
+    pareceres_b = res_b.get("pareceres", {})
+    if pareceres_a or pareceres_b:
+        _radar_duplo(pareceres_a, pareceres_b, nome_a, nome_b)
+
+
+# ---------------------------------------------------------------------------
 # Ponto de entrada da página
 # ---------------------------------------------------------------------------
 
@@ -698,7 +909,11 @@ def render():
     st.caption("Sistema de apoio a decisões de expansão de conectividade | Trilha 3 · IBM SkillsBuild")
     st.warning(_AVISO_SIMULADO)
 
-    aba_analise, aba_historico = st.tabs(["🔍 Análise de Região", "📚 Histórico e Ranking"])
+    aba_analise, aba_comparar, aba_historico = st.tabs([
+        "🔍 Análise de Região",
+        "⚖️ Comparar Regiões",
+        "📚 Histórico e Ranking",
+    ])
 
     with aba_analise:
         regiao_id, regioes, executar = _secao_selecao()
@@ -780,6 +995,10 @@ def render():
                 resultado_atual,
                 veio_do_cache=st.session_state.get(f"cache_{regiao_id}", False),
             )
+
+    with aba_comparar:
+        st.caption(_AVISO_SIMULADO)
+        _secao_comparar(fonte)
 
     with aba_historico:
         st.caption(_AVISO_SIMULADO)
