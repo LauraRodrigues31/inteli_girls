@@ -43,9 +43,18 @@ def _mock_streamlit():
             # cache simples em memória (dict keyed por args)
             _store: dict = {}
 
+            def _cache_key(args, kwargs):
+                # Mimics Streamlit: parâmetros com prefixo "_" são excluídos da
+                # chave de cache (usados apenas para passar dados não-cacheáveis
+                # como callbacks).
+                kwargs_cacheaveis = tuple(
+                    sorted((k, v) for k, v in kwargs.items() if not k.startswith("_"))
+                )
+                return (args, kwargs_cacheaveis)
+
             @functools.wraps(fn)
             def _wrapper(*args, **kwargs):
-                key = (args, tuple(sorted(kwargs.items())))
+                key = _cache_key(args, kwargs)
                 if key not in _store:
                     _store[key] = fn(*args, **kwargs)
                 return _store[key]
@@ -54,7 +63,7 @@ def _mock_streamlit():
                 if not args and not kwargs:
                     _store.clear()
                 else:
-                    key = (args, tuple(sorted(kwargs.items())))
+                    key = _cache_key(args, kwargs)
                     _store.pop(key, None)
 
             _wrapper.clear = _clear
@@ -121,7 +130,7 @@ class TestCacheNuvem:
 
         chamadas = []
 
-        def mock_guardiao(regiao_id, *, fonte=None):
+        def mock_guardiao(regiao_id, *, fonte=None, ao_concluir_agente=None):
             chamadas.append(regiao_id)
             return _resultado_ok(regiao_id)
 
@@ -145,7 +154,7 @@ class TestCacheNuvem:
 
         chamadas = []
 
-        def mock_guardiao(regiao_id, *, fonte=None):
+        def mock_guardiao(regiao_id, *, fonte=None, ao_concluir_agente=None):
             chamadas.append(regiao_id)
             if len(chamadas) == 1:
                 return _resultado_incompleto(regiao_id)
@@ -177,7 +186,7 @@ class TestCacheNuvem:
 
         chamadas: list[str] = []
 
-        def mock_guardiao(regiao_id, *, fonte=None):
+        def mock_guardiao(regiao_id, *, fonte=None, ao_concluir_agente=None):
             chamadas.append(regiao_id)
             return _resultado_ok(regiao_id, score=42)
 
@@ -215,7 +224,7 @@ class TestConsultarNuvem:
 
     def test_marca_veio_do_cache_so_na_segunda_chamada(self, monkeypatch):
         mod = _importar_modulo()
-        monkeypatch.setattr(mod, "chamar_guardiao", lambda r, *, fonte=None: _resultado_ok(r))
+        monkeypatch.setattr(mod, "chamar_guardiao", lambda r, *, fonte=None, ao_concluir_agente=None: _resultado_ok(r))
         mod._consultar_nuvem_cached.clear("central", "nuvem")
 
         _, do_cache_1 = mod._consultar_nuvem("central", "nuvem")
@@ -228,7 +237,7 @@ class TestConsultarNuvem:
         mod = _importar_modulo()
         chamadas: list[str] = []
 
-        def mock_guardiao(regiao_id, *, fonte=None):
+        def mock_guardiao(regiao_id, *, fonte=None, ao_concluir_agente=None):
             chamadas.append(regiao_id)
             return _resultado_ok(regiao_id)
 
@@ -246,7 +255,7 @@ class TestConsultarNuvem:
         mod = _importar_modulo()
         chamadas: list[str] = []
 
-        def mock_guardiao(regiao_id, *, fonte=None):
+        def mock_guardiao(regiao_id, *, fonte=None, ao_concluir_agente=None):
             chamadas.append(regiao_id)
             if len(chamadas) == 2:
                 return _resultado_incompleto(regiao_id)
