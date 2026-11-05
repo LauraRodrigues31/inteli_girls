@@ -183,7 +183,7 @@ def _verificar_credenciais_nuvem() -> tuple[bool, str]:
     ids = _ler_ids_agentes()
     ids_ausentes = [chave_env for chave_env, valor in ids.items() if not valor]
     if ids_ausentes:
-        return False, f"IDs de agente ausentes no .env: {', '.join(ids_ausentes)}"
+        return False, f"IDs de agente ausentes (variáveis de ambiente ou .env): {', '.join(ids_ausentes)}"
     return True, ""
 
 

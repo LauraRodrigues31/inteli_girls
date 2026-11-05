@@ -82,6 +82,20 @@ def _consultar_nuvem_cached(regiao_id: str, fonte: str) -> dict:
     return resultado
 
 
+def _consultar_nuvem(regiao_id: str, fonte: str, *, ignorar_cache: bool = False) -> tuple[dict, bool]:
+    """
+    Consulta a nuvem passando pelo cache.  Falhas (analise_incompleta) nunca
+    ficam guardadas.  Devolve (resultado, veio_do_cache).
+    """
+    if ignorar_cache:
+        _consultar_nuvem_cached.clear(regiao_id, fonte)
+    inicio = time.time()
+    resultado = _consultar_nuvem_cached(regiao_id, fonte)
+    if resultado.get("status") == "analise_incompleta":
+        _consultar_nuvem_cached.clear(regiao_id, fonte)
+    return resultado, resultado.get("consultado_em", inicio) < inicio
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -338,6 +352,7 @@ def _secao_resultado(resultado: dict, *, veio_do_cache: bool = False):
                     try:
                         resultado_local = chamar_guardiao(regiao_id, fonte="local")
                         st.session_state[f"resultado_{regiao_id}"] = resultado_local
+                        st.session_state[f"cache_{regiao_id}"] = False
                         _registrar_historico(resultado_local)
                         st.rerun()
                     except Exception as exc:
@@ -496,19 +511,16 @@ def render():
         regiao_id, regioes, executar = _secao_selecao()
         _secao_indicadores(regiao_id)
 
-        veio_do_cache = False
-
         if executar:
             with st.spinner(f"Executando o Conselho para {regiao_id}..."):
                 try:
+                    veio_do_cache = False
                     if fonte == "nuvem":
-                        resultado = _consultar_nuvem_cached(regiao_id, fonte)
-                        veio_do_cache = (time.time() - resultado.get("consultado_em", 0)) > 2
-                        if resultado.get("status") == "analise_incompleta":
-                            _consultar_nuvem_cached.clear(regiao_id, fonte)
+                        resultado, veio_do_cache = _consultar_nuvem(regiao_id, fonte)
                     else:
                         resultado = chamar_guardiao(regiao_id, fonte=fonte)
                     st.session_state[f"resultado_{regiao_id}"] = resultado
+                    st.session_state[f"cache_{regiao_id}"] = veio_do_cache
                     _registrar_historico(resultado)
                     if resultado.get("status") == "analise_incompleta":
                         st.warning("Análise incompleta — verifique os agentes com falha.")
@@ -522,7 +534,7 @@ def render():
         resultado_atual = st.session_state.get(f"resultado_{regiao_id}")
 
         # Botão "Consultar a IBM novamente" — limpa cache só desta região e re-executa
-        if resultado_atual and fonte == "nuvem":
+        if resultado_atual and resultado_atual.get("fonte") == "nuvem":
             col_cache, _ = st.columns([2, 3])
             with col_cache:
                 if st.button(
@@ -530,24 +542,23 @@ def render():
                     key=f"refetch_{regiao_id}",
                     help="Ignora o cache e busca uma nova análise na nuvem.",
                 ):
-                    _consultar_nuvem_cached.clear(regiao_id, fonte)
                     with st.spinner(f"Consultando a IBM para {regiao_id}..."):
                         try:
-                            resultado_atual = _consultar_nuvem_cached(regiao_id, fonte)
+                            resultado_atual, veio_do_cache = _consultar_nuvem(
+                                regiao_id, "nuvem", ignorar_cache=True
+                            )
                             st.session_state[f"resultado_{regiao_id}"] = resultado_atual
+                            st.session_state[f"cache_{regiao_id}"] = veio_do_cache
                             _registrar_historico(resultado_atual)
-                            veio_do_cache = False
                             st.success("Nova consulta concluída!")
                         except Exception as e:
                             st.error(f"Erro ao reconsultar: {e}")
 
-            # Detecta cache: resultado foi obtido há mais de 2s
-            if not executar and resultado_atual:
-                consultado_em = resultado_atual.get("consultado_em", 0)
-                veio_do_cache = (time.time() - consultado_em) > 2
-
         if resultado_atual:
-            _secao_resultado(resultado_atual, veio_do_cache=veio_do_cache)
+            _secao_resultado(
+                resultado_atual,
+                veio_do_cache=st.session_state.get(f"cache_{regiao_id}", False),
+            )
 
     with aba_historico:
         st.caption(_AVISO_SIMULADO)

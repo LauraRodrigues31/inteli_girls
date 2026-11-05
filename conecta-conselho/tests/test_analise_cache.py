@@ -208,3 +208,58 @@ class TestCacheNuvem:
             "Após clear(central), a próxima chamada para central deveria ir ao mock "
             f"mas o mock foi chamado {len(chamadas)} vez(es)."
         )
+
+
+class TestConsultarNuvem:
+    """Testes de _consultar_nuvem — caminho único usado pelo botão Executar e pelo refetch."""
+
+    def test_marca_veio_do_cache_so_na_segunda_chamada(self, monkeypatch):
+        mod = _importar_modulo()
+        monkeypatch.setattr(mod, "chamar_guardiao", lambda r, *, fonte=None: _resultado_ok(r))
+        mod._consultar_nuvem_cached.clear("central", "nuvem")
+
+        _, do_cache_1 = mod._consultar_nuvem("central", "nuvem")
+        _, do_cache_2 = mod._consultar_nuvem("central", "nuvem")
+
+        assert do_cache_1 is False
+        assert do_cache_2 is True
+
+    def test_ignorar_cache_vai_a_nuvem(self, monkeypatch):
+        mod = _importar_modulo()
+        chamadas: list[str] = []
+
+        def mock_guardiao(regiao_id, *, fonte=None):
+            chamadas.append(regiao_id)
+            return _resultado_ok(regiao_id)
+
+        monkeypatch.setattr(mod, "chamar_guardiao", mock_guardiao)
+        mod._consultar_nuvem_cached.clear("central", "nuvem")
+
+        mod._consultar_nuvem("central", "nuvem")
+        _, do_cache = mod._consultar_nuvem("central", "nuvem", ignorar_cache=True)
+
+        assert len(chamadas) == 2
+        assert do_cache is False
+
+    def test_refetch_incompleto_nao_fica_no_cache(self, monkeypatch):
+        """Falha vinda do 'Consultar a IBM novamente' também não pode ficar guardada."""
+        mod = _importar_modulo()
+        chamadas: list[str] = []
+
+        def mock_guardiao(regiao_id, *, fonte=None):
+            chamadas.append(regiao_id)
+            if len(chamadas) == 2:
+                return _resultado_incompleto(regiao_id)
+            return _resultado_ok(regiao_id)
+
+        monkeypatch.setattr(mod, "chamar_guardiao", mock_guardiao)
+        mod._consultar_nuvem_cached.clear("aurora", "nuvem")
+
+        mod._consultar_nuvem("aurora", "nuvem")
+        r2, _ = mod._consultar_nuvem("aurora", "nuvem", ignorar_cache=True)
+        assert r2["status"] == "analise_incompleta"
+
+        r3, do_cache = mod._consultar_nuvem("aurora", "nuvem")
+        assert len(chamadas) == 3
+        assert r3["status"] == "concluida"
+        assert do_cache is False
