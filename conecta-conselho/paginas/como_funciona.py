@@ -109,7 +109,7 @@ _INFO_REC: dict[str, dict] = {
         "fundo": "#fef9c3",
         "emoji": "🟡",
         "label": "Aguardar",
-        "regra": "Score entre 30 e 49",
+        "regra": "Score abaixo de 50",
     },
     "analise_incompleta": {
         "cor": "#6e7781",
@@ -270,37 +270,29 @@ de vista **opostos de propósito** — para que nenhuma decisão seja só pelo d
     )
 
     # Botões de atalho — preenchem session_state antes dos sliders
-    col_a, col_b, col_c, col_d = st.columns(4)
-    with col_a:
-        if st.button("Esperança", use_container_width=True):
-            for k, v in SCORES_REGIOES["Esperança"].items():
-                st.session_state[f"slider_{k}"] = v
-    with col_b:
-        if st.button("Central", use_container_width=True):
-            for k, v in SCORES_REGIOES["Central"].items():
-                st.session_state[f"slider_{k}"] = v
-    with col_c:
-        if st.button("Nova União", use_container_width=True):
-            for k, v in SCORES_REGIOES["Nova União"].items():
-                st.session_state[f"slider_{k}"] = v
-    with col_d:
-        if st.button("Resetar", use_container_width=True):
-            for k, v in SCORES_REGIOES["Esperança"].items():
-                st.session_state[f"slider_{k}"] = v
+    # Valor inicial dos sliders vem só do session_state (Esperança na 1ª vez).
+    # Passar value= junto com key= e session_state gera aviso do Streamlit.
+    for k, v in SCORES_REGIOES["Esperança"].items():
+        st.session_state.setdefault(f"slider_{k}", v)
 
-    # Sliders (começam nos valores da Esperança)
+    atalhos = [("Esperança", "Esperança"), ("Central", "Central"),
+               ("Nova União", "Nova União"), ("Resetar", "Esperança")]
+    for col, (rotulo, regiao) in zip(st.columns(4), atalhos):
+        with col:
+            if st.button(rotulo, use_container_width=True):
+                for k, v in SCORES_REGIOES[regiao].items():
+                    st.session_state[f"slider_{k}"] = v
+
     st.markdown("**Scores dos agentes (0–100):**")
     slider_vals: dict[str, int] = {}
     s_cols = st.columns(5)
     for i, agente in enumerate(AGENTES):
         chave = agente["chave"]
-        padrao = SCORES_REGIOES["Esperança"][chave]
         with s_cols[i]:
             slider_vals[chave] = st.slider(
                 f"{agente['icone']} {agente['nome']}",
                 min_value=0,
                 max_value=100,
-                value=st.session_state.get(f"slider_{chave}", padrao),
                 key=f"slider_{chave}",
             )
 
@@ -376,19 +368,19 @@ A decisão final é sempre de uma pessoa.
 
     # ── Seção 5: Comece agora ───────────────────────────────────────────────
     st.header("🚀 Comece agora")
-    c1, c2, c3 = st.columns(3)
+    # As páginas são registradas por função em paginas/rotas.py, então o link
+    # precisa do objeto st.Page (um caminho "paginas/x.py" nunca é encontrado).
+    from paginas.rotas import criar_paginas  # type: ignore[import]
+
+    paginas = criar_paginas()
     _links = [
-        ("paginas/analise.py",   "🔍 Análise de Região",     "Analise uma região com os 5 agentes."),
-        ("paginas/mapa.py",      "🗺️ Mapa ilustrativo",      "Veja todas as regiões no mapa."),
-        ("paginas/simulador.py", "🧪 Simulador de cenários", "Teste cenários hipotéticos."),
+        ("analise",   "Analise uma região com os 5 agentes."),
+        ("mapa",      "Veja todas as regiões no mapa."),
+        ("simulador", "Teste cenários hipotéticos."),
     ]
-    for col, (path, label, help_txt) in zip([c1, c2, c3], _links):
+    for col, (chave, help_txt) in zip(st.columns(3), _links):
         with col:
-            try:
-                st.page_link(path, label=label, help=help_txt)
-            except Exception:
-                # st.page_link requer contexto st.navigation; fora dele usa botão simples
-                st.button(label, help=help_txt, disabled=True, use_container_width=True)
+            st.page_link(paginas[chave], help=help_txt)
 
     # ── Rodapé ──────────────────────────────────────────────────────────────
     st.divider()

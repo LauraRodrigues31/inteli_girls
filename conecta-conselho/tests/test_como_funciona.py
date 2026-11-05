@@ -283,3 +283,40 @@ class TestFraseRegra:
     def test_retorna_string(self, scores_esperanca):
         res = extrair_resultado(scores_esperanca)
         assert isinstance(frase_regra(res), str)
+
+
+# ---------------------------------------------------------------------------
+# Testes da página renderizada no app (AppTest)
+# ---------------------------------------------------------------------------
+
+from streamlit.testing.v1 import AppTest  # noqa: E402
+
+from paginas.como_funciona import _INFO_REC  # type: ignore[import]  # noqa: E402
+
+
+@pytest.fixture()
+def app_como_funciona() -> AppTest:
+    at = AppTest.from_file(str(_CC_DIR / "app.py"))
+    at.run(timeout=30)
+    assert not at.exception
+    return at
+
+
+class TestPaginaNoApp:
+    def test_links_para_as_outras_paginas(self, app_como_funciona):
+        """Os 3 links devem ser st.page_link reais, não botões desabilitados."""
+        links = app_como_funciona.get("page_link")
+        assert len(links) == 3
+        assert not [b for b in app_como_funciona.button if b.disabled]
+
+    def test_atalho_preenche_sliders(self, app_como_funciona):
+        at = app_como_funciona
+        next(b for b in at.button if b.label == "Central").click().run(timeout=30)
+        assert not at.exception
+        esperado = SCORES_REGIOES["Central"]
+        assert [s.value for s in at.slider] == [esperado[a["chave"]] for a in AGENTES]
+
+    def test_regra_aguardar_igual_ao_guardiao(self):
+        """Guardião: aguardar = score < 50 (não existe mais faixa 30–49)."""
+        assert "50" in _INFO_REC["aguardar"]["regra"]
+        assert "30" not in _INFO_REC["aguardar"]["regra"]
