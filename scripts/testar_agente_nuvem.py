@@ -2,6 +2,9 @@
 Testa qualquer um dos 5 agentes do Conecta Conselho pela API de runtime
 do IBM watsonx Orchestrate.
 
+AVISO: Todos os dados utilizados neste script são SIMULADOS e FICTÍCIOS.
+Os scores esperados são calculados a partir de regioes.json (base simulada).
+
 Uso:
     python scripts/testar_agente_nuvem.py <nome>
 
