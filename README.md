@@ -56,9 +56,8 @@ Os 5 agentes são chamados em paralelo via `ThreadPoolExecutor`. A consolidaçã
 | Página | Descrição |
 |---|---|
 | **📖 Como funciona** | Página inicial interativa — apresenta os agentes, sliders para brincar com o Guardião ao vivo e legenda das recomendações |
-| **🔍 Análise de Região** | Executa os 5 agentes (IBM ou local), exibe pareceres, recomendação, alerta de atenção prioritária, motivos e caminhos, ranking da sessão e download do relatório JSON |
-| **🗺️ Mapa ilustrativo** | Visualização das regiões e recomendações em mapa esquemático |
-| **🧪 Simulador de cenários** | "E se…?" — simula impacto de parcerias, teto de investimento e distância do backbone; prova que Esperança vai de 44 (Aguardar) → 50 (Piloto) com parcerias |
+| **🔍 Análise de Região** | Executa os 5 agentes (IBM ou local), exibe pareceres, recomendação, alerta de atenção prioritária, motivos e caminhos, ranking da sessão e download do relatório JSON. Inclui o **mapa interativo** colorido pela recomendação do Guardião (verde = piloto, azul = investir, amarelo = aguardar, borda vermelha = atenção prioritária) — a pessoa escolhe a região clicando no mapa. Também possui abas de comparação lado a lado e histórico/ranking |
+| **🧪 Simulador de cenários** | "E se…?" — simula impacto de parcerias, teto de investimento e distância do backbone; prova que Esperança vai de 44 (Aguardar) → 50 (Piloto) com parcerias. O **mapa interativo** também está disponível aqui para selecionar a região de simulação |
 
 ---
 
@@ -74,11 +73,11 @@ inteli_girls/
 │   ├── integracao.py          # Camada multi-fonte (local / nuvem)
 │   ├── cliente_nuvem.py       # Conexão IBM watsonx Orchestrate
 │   ├── simulador.py           # Motor de cenários determinístico
-│   ├── paginas/               # Uma página por arquivo (como_funciona, analise, mapa, simulador)
+│   ├── paginas/               # Uma página por arquivo (como_funciona, analise, simulador) + mapa_seletor (componente do mapa)
 │   ├── data/                  # regioes.json e regioes.csv (dados simulados)
 │   ├── models/                # Modelos Pydantic (regiao.py)
 │   ├── tools/                 # consultar_regiao.py (consultas compartilhadas)
-│   ├── tests/                 # Testes automatizados (1 009 testes)
+│   ├── tests/                 # Testes automatizados (mais de mil testes)
 │   └── docs/                  # Documentação do projeto
 ├── requirements.txt
 └── pytest.ini
@@ -197,7 +196,25 @@ Resultados por região: [RESULTADOS_REGIOES.md](conecta-conselho/docs/RESULTADOS
 
 ## Capturas de tela
 
-[PRINTS]
+**Como funciona** — página inicial interativa com os agentes:
+![Como funciona](conecta-conselho/docs/prints/print_como_funciona.png)
+
+**Análise de Região** — mapa interativo colorido pela recomendação do Guardião (borda vermelha = atenção prioritária):
+![Análise — mapa colorido](conecta-conselho/docs/prints/print_analise_mapa.png)
+
+**Nova União selecionada** — modo IBM watsonx Orchestrate:
+![Análise — Nova União IBM](conecta-conselho/docs/prints/print_analise_nova_uniao_ibm.png)
+
+**Central selecionada**:
+![Análise — Central](conecta-conselho/docs/prints/print_analise_central.png)
+
+**Comparar regiões** — Central × Nova União lado a lado:
+![Comparar regiões](conecta-conselho/docs/prints/print_comparar_central_nova_uniao.png)
+
+**Simulador de cenários** — atalho Esperança com parcerias + mapa:
+![Simulador — Esperança](conecta-conselho/docs/prints/print_simulador_esperanca_mapa.png)
+
+> ℹ️ Prints capturados em https://conecta-conselho.streamlit.app · zoom 125% · dados simulados
 
 ---
 
