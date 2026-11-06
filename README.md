@@ -116,7 +116,49 @@ python -m streamlit run conecta-conselho/app.py
 
 (com o ambiente virtual ativo; abrir fora do venv causa erro de módulo do ADK)
 
-Modo padrão: local (cálculos determinísticos, sem nuvem).
+Fonte dos pareceres (barra lateral):
+
+- **IBM watsonx Orchestrate**: vira o padrão quando `WXO_URL`, `WXO_API_KEY` e os 5 `CC_AGENT_ID_*` estão definidos. Resultados da nuvem ficam em cache por 6 h por região; o botão **🔄 Consultar a IBM novamente** ignora o cache. Análises incompletas nunca ficam em cache.
+- **Local**: cálculos determinísticos sem nuvem. É o padrão quando faltam credenciais ou IDs, e o plano B se a nuvem falhar (botão **🖥️ Analisar no modo Local**).
+
+As variáveis são lidas primeiro do ambiente do processo e depois do `.env` na raiz.
+
+#### Cartografia fictícia
+
+O mapa da Análise de Região e do Simulador lê `conecta-conselho/data/territorio_ficticio.geojson`.
+As feições são organizadas por `properties.camada`, incluindo regiões, litoral, rios,
+vias, áreas protegidas, relevo, núcleos urbanos e fibra. Para regenerar o arquivo
+a partir da malha de referência, na raiz do projeto execute:
+
+```powershell
+python scripts/gerar_geografia_ficticia.py
+```
+
+O gerador usa apenas a biblioteca padrão do Python. A semente é fixa, e cada
+trecho compartilhado é detalhado uma vez e reutilizado pelas regiões vizinhas.
+O arquivo GeoJSON usa uma origem angular fictícia em `(0, 0)`, codificando a
+malha local como `[x / 1000, -y / 1000]`. O componente converte esses valores
+de volta para o plano de desenho. Por isso, a carta tem orientação norte e
+zoom, mas não usa escala em quilômetros. As distâncias e os indicadores
+exibidos são os da base simulada. Todas as camadas são locais.
+
+### Deploy no Streamlit Cloud
+
+1. Em *Create app*, aponte para este repositório, branch `main` e arquivo `conecta-conselho/app.py`.
+2. Em *Advanced settings*, escolha **Python 3.12**.
+3. Em *Secrets*, cole as variáveis no nível raiz do TOML (o Streamlit as expõe como variáveis de ambiente):
+
+```toml
+WXO_URL = "https://..."
+WXO_API_KEY = "..."
+CC_AGENT_ID_MERCADO = "..."
+CC_AGENT_ID_SOCIAL = "..."
+CC_AGENT_ID_ENGENHARIA = "..."
+CC_AGENT_ID_ORCAMENTO = "..."
+CC_AGENT_ID_PONTES = "..."
+```
+
+Sem os Secrets, o app sobe normalmente no modo Local.
 
 ---
 
