@@ -304,9 +304,11 @@ def app_como_funciona() -> AppTest:
 
 class TestPaginaNoApp:
     def test_links_para_as_outras_paginas(self, app_como_funciona):
-        """Os 3 links devem ser st.page_link reais, não botões desabilitados."""
+        """Os 2 links devem ser st.page_link reais, não botões desabilitados.
+        (A página Mapa ilustrativo foi removida da navegação na M2 revisada.)
+        """
         links = app_como_funciona.get("page_link")
-        assert len(links) == 3
+        assert len(links) == 2
         assert not [b for b in app_como_funciona.button if b.disabled]
 
     def test_atalho_preenche_sliders(self, app_como_funciona):
