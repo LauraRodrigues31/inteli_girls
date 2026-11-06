@@ -76,11 +76,11 @@ _MAPA = st.components.v2.component(
             <ul class="legenda" aria-label="Legenda do mapa">
                 <li><i class="amostra limite"></i> Limite regional</li>
                 <li><i class="amostra preenchimento"></i> Região selecionada</li>
-                <li><i class="amostra rio"></i> Curso d’água</li>
+                <li><i class="amostra rio"></i> Curso d'água</li>
                 <li><i class="amostra via"></i> Rodovia</li>
                 <li><i class="amostra reserva"></i> Área protegida</li>
                 <li><i class="amostra urbano"></i> Núcleo urbano</li>
-                <li><i class="amostra rede"></i> Rede principal de fibra</li>
+                <li><i class="amostra rede"></i> Backbone atual</li>
             </ul>
         </div>
     """,
@@ -139,6 +139,7 @@ _MAPA = st.components.v2.component(
             const ns = "http://www.w3.org/2000/svg";
             const width = 860, height = 380;
             const layers = data.camadas;
+            const sim = data.simulacao;  // { dist_original, dist_simulada, recomendacao, regiao_id } | null
 
             function draw(parent, tag, attrs, text) {
                 const element = document.createElementNS(ns, tag);
@@ -205,7 +206,7 @@ _MAPA = st.components.v2.component(
                 if (focusedId === id) group.focus();
             }
 
-            const detail = draw(map, "g", { "pointer-events": "none", "aria-hidden": "true" });
+            const detail = draw(svg, "g", { "pointer-events": "none", "aria-hidden": "true" });
             layer("reserva", () => ({ fill: "#9bb685", opacity: .36 }), detail);
             layer("relevo", () => ({ ...line("#879c7e", .7), opacity: .46 }), detail);
             layer("urbano", () => ({ fill: "#b4a395", opacity: .47 }), detail);
@@ -226,10 +227,131 @@ _MAPA = st.components.v2.component(
                     "text-anchor": "middle", "dominant-baseline": "central"
                 }, nome.replace(/^Região /, ""));
             }
+
+            // ---------------------------------------------------------------
+            // Camada de infraestrutura (pointer-events: none para não bloquear cliques)
+            // ---------------------------------------------------------------
+            const infraLayer = draw(svg, "g", { "pointer-events": "none", "aria-hidden": "true" });
+
+            // Marcador do backbone atual (fibra) — rotulado "Backbone atual"
             for (const feature of layers.fibra) {
                 const [cx, cy] = xy(feature.geometry.coordinates);
-                draw(detail, "circle", { cx, cy, r: 5, fill: "#203e38", stroke: "#fff", "stroke-width": 1.7 });
+                draw(infraLayer, "circle", { cx, cy, r: 5, fill: "#203e38", stroke: "#fff", "stroke-width": 1.7 });
+                draw(infraLayer, "text", {
+                    x: cx + 8, y: cy - 7,
+                    fill: "#203e38", "font-size": "9", "font-weight": "600",
+                    "font-family": "system-ui, sans-serif",
+                    "paint-order": "stroke", stroke: "#fff", "stroke-width": "2px", "stroke-opacity": ".8"
+                }, "Backbone atual");
+
+                // ---------------------------------------------------------------
+                // Camada de simulação (só quando sim != null e há região selecionada)
+                // ---------------------------------------------------------------
+                if (sim && data.selecionada) {
+                    const distOrig = sim.dist_original;
+                    const distSim = sim.dist_simulada;
+                    const rec = sim.recomendacao;
+
+                    // Cor do marcador simulado conforme recomendação
+                    const corRec = {
+                        "investir_agora": "#16a34a",
+                        "realizar_piloto": "#2563eb",
+                        "aguardar": "#ea580c",
+                    }[rec] || "#6b7280";
+
+                    // Ponto de referência da região selecionada (rótulo do GeoJSON)
+                    let regiaoRotulo = null;
+                    for (const feature of layers.regiao) {
+                        if (feature.properties.id === data.selecionada) {
+                            regiaoRotulo = feature.properties.rotulo;
+                            break;
+                        }
+                    }
+
+                    if (regiaoRotulo) {
+                        const [rx, ry] = xy(regiaoRotulo);
+                        // backbone atual = cx, cy
+
+                        // Calcula posição do ponto simulado no segmento backbone → região
+                        // proporção = 1 - nova_distancia / distancia_original
+                        // Trata distância original zero sem divisão por zero
+                        let proporcao = 0;
+                        if (distOrig > 0) {
+                            proporcao = 1 - distSim / distOrig;
+                        }
+                        // Clamp: 0..1
+                        proporcao = Math.max(0, Math.min(1, proporcao));
+
+                        const sx = cx + proporcao * (rx - cx);
+                        const sy = cy + proporcao * (ry - cy);
+
+                        // Só desenha seta se há aproximação (proporcao > 0)
+                        // e distâncias são diferentes (evita marcador duplo quando igual)
+                        const distanciasMudam = Math.abs(distSim - distOrig) > 0.001;
+
+                        if (distanciasMudam && proporcao > 0) {
+                            // Seta do backbone atual ao ponto simulado
+                            const dx = sx - cx, dy = sy - cy;
+                            const len = Math.sqrt(dx * dx + dy * dy);
+                            if (len > 2) {
+                                // Linha da seta
+                                draw(infraLayer, "line", {
+                                    x1: cx, y1: cy, x2: sx, y2: sy,
+                                    stroke: corRec, "stroke-width": "1.5",
+                                    "stroke-dasharray": "4 2",
+                                    "marker-end": "url(#simArrow)"
+                                });
+                            }
+
+                            // Marcador simulado
+                            draw(infraLayer, "circle", {
+                                cx: sx, cy: sy, r: 6,
+                                fill: corRec, stroke: "#fff", "stroke-width": 1.7
+                            });
+                            draw(infraLayer, "text", {
+                                x: sx + 9, y: sy - 8,
+                                fill: corRec, "font-size": "9", "font-weight": "700",
+                                "font-family": "system-ui, sans-serif",
+                                "paint-order": "stroke", stroke: "#fff", "stroke-width": "2.5px", "stroke-opacity": ".9"
+                            }, "Infraestrutura simulada");
+
+                            // Etiqueta distância simulada
+                            draw(infraLayer, "text", {
+                                x: sx + 9, y: sy + 3,
+                                fill: corRec, "font-size": "8", "font-weight": "600",
+                                "font-family": "system-ui, sans-serif",
+                                "paint-order": "stroke", stroke: "#fff", "stroke-width": "2px", "stroke-opacity": ".8"
+                            }, `${distSim} km`);
+                        }
+
+                        // Etiqueta distância original no backbone atual
+                        if (distanciasMudam) {
+                            draw(infraLayer, "text", {
+                                x: cx + 8, y: cy + 4,
+                                fill: "#203e38", "font-size": "8", "font-weight": "600",
+                                "font-family": "system-ui, sans-serif",
+                                "paint-order": "stroke", stroke: "#fff", "stroke-width": "2px", "stroke-opacity": ".8"
+                            }, `${distOrig} km`);
+                        }
+                    }
+                }
             }
+
+            // Define marcador de seta (defs SVG) para uso pelo marker-end
+            const defs = document.createElementNS(ns, "defs");
+            const marker = document.createElementNS(ns, "marker");
+            marker.setAttribute("id", "simArrow");
+            marker.setAttribute("markerWidth", "6");
+            marker.setAttribute("markerHeight", "6");
+            marker.setAttribute("refX", "5");
+            marker.setAttribute("refY", "3");
+            marker.setAttribute("orient", "auto");
+            const arrowPath = document.createElementNS(ns, "path");
+            arrowPath.setAttribute("d", "M0,0 L0,6 L6,3 z");
+            arrowPath.setAttribute("fill", "context-stroke");
+            marker.appendChild(arrowPath);
+            defs.appendChild(marker);
+            svg.insertBefore(defs, svg.firstChild);
 
             const view = JSON.parse(root.dataset.vista || '{"zoom":1,"x":0,"y":0}');
             const zoomIn = controls.querySelector('[data-zoom="in"]');
@@ -299,8 +421,21 @@ def renderizar_seletor_mapa(
     dados_regioes: dict[str, dict] | None = None,
     *,
     chart_key: str = "mapa_selector",
+    camada_simulacao: dict | None = None,
+    regiao_selecionada_id: str | None = None,
 ) -> str | None:
-    """Renderiza o território e sincroniza a escolha entre as páginas."""
+    """Renderiza o território e sincroniza a escolha entre as páginas.
+
+    Args:
+        dados_regioes: Dicionário de dados completos por região (para tooltips).
+        chart_key: Chave do componente Streamlit.
+        camada_simulacao: Dados para a camada de simulação. Quando fornecido pelo
+            Simulador, deve conter ``dist_original``, ``dist_simulada`` e
+            ``recomendacao``. ``None`` omite a camada (comportamento padrão para
+            a página de Análise).
+        regiao_selecionada_id: ID da região selecionada (opcional, sobrescreve
+            sessão apenas para passagem explícita de dados ao mapa).
+    """
     dados_geo = carregar_poligonos()
     nomes = {regiao["id"]: regiao["nome"] for regiao in dados_geo["regioes"]}
     tooltips = {}
@@ -336,7 +471,12 @@ def renderizar_seletor_mapa(
         else:
             st.markdown("**Clique em uma região para explorar**")
         _MAPA(
-            data={"camadas": camadas, "selecionada": atual, "tooltips": tooltips},
+            data={
+                "camadas": camadas,
+                "selecionada": atual,
+                "tooltips": tooltips,
+                "simulacao": camada_simulacao,
+            },
             key=chart_key,
             on_regiao_change=selecionar_no_mapa,
         )

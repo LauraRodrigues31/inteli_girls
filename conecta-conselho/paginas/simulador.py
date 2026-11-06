@@ -36,6 +36,8 @@ _AVISO_SIMULADO = (
     "sem consultar a IBM. Dados simulados."
 )
 
+_AVISO_IBM = "Simulação local com as mesmas regras dos agentes. Não consulta a IBM."
+
 _LABELS_RECOMENDACAO = {
     "investir_agora":  "✅ Investir Agora",
     "realizar_piloto": "🔬 Realizar Piloto",
@@ -144,6 +146,53 @@ def _grafico_barras_agentes(resultado_base: dict, resultado_simulado: dict):
     st.plotly_chart(fig, use_container_width=True)
 
 
+def _resumo_inline(resultado: dict, dist_original: float) -> str:
+    """Monta linha resumo: 'Engenharia 11 → 31 · Score 30 → 35 · Recomendação: aguardar'."""
+    res_base = resultado.get("base", {})
+    res_sim = resultado.get("simulado", {})
+
+    eng_base = res_base.get("pareceres", {}).get("engenharia", {}).get("score", "–")
+    eng_sim = res_sim.get("pareceres", {}).get("engenharia", {}).get("score", "–")
+    score_base = res_base.get("score_consolidado", "–")
+    score_sim = res_sim.get("score_consolidado", "–")
+    rec = res_sim.get("recomendacao") or "–"
+    rec_label = {
+        "investir_agora": "investir agora",
+        "realizar_piloto": "realizar piloto",
+        "aguardar": "aguardar",
+    }.get(rec, rec)
+
+    return (
+        f"Engenharia {eng_base} → {eng_sim} · "
+        f"Score {score_base} → {score_sim} · "
+        f"Recomendação: **{rec_label}**"
+    )
+
+
+def _camada_simulacao(resultado: dict, dist_original: float) -> dict | None:
+    """
+    Monta o dict de camada de simulação para o mapa.
+
+    Retorna None se não há resultado ou se a distância simulada é a original.
+    """
+    if not resultado:
+        return None
+
+    params = resultado.get("parametros", {})
+    dist_sim = params.get("distancia_backbone_km")
+    if dist_sim is None:
+        return None  # slider não foi usado para distância
+
+    res_sim = resultado.get("simulado", {})
+    rec = res_sim.get("recomendacao")
+
+    return {
+        "dist_original": dist_original,
+        "dist_simulada": dist_sim,
+        "recomendacao": rec,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Ponto de entrada da página
 # ---------------------------------------------------------------------------
@@ -171,8 +220,23 @@ def render():
     except Exception:
         dados_map = None
 
-    # O componente já exibe "Clique em uma região" e o selectbox recolhido
-    regiao_id_mapa = renderizar_seletor_mapa(dados_map, chart_key="mapa_simulador")
+    # Determina camada de simulação para o mapa (resultado da última execução)
+    regiao_ativa = st.session_state.get(_SESSION_KEY)
+    resultado_para_mapa = st.session_state.get(f"sim_resultado_{regiao_ativa}") if regiao_ativa else None
+    dist_original_para_mapa = None
+    if regiao_ativa and dados_map:
+        dist_original_para_mapa = (
+            (dados_map.get(regiao_ativa) or {}).get("engenharia", {}).get("distancia_backbone_km", 0)
+        )
+    camada_sim = _camada_simulacao(resultado_para_mapa, dist_original_para_mapa or 0)
+
+    # Renderiza mapa com camada opcional de simulação
+    regiao_id_mapa = renderizar_seletor_mapa(
+        dados_map,
+        chart_key="mapa_simulador",
+        camada_simulacao=camada_sim,
+        regiao_selecionada_id=regiao_ativa,
+    )
 
     # Botão de atalho — história do one-pager
     if st.button("▶️ História do one-pager: Esperança com parcerias", key="atalho_onepager"):
@@ -191,46 +255,56 @@ def render():
     # --- Carrega dados originais da região para preencher os defaults dos controles ---
     dados_regiao = consultar_regiao(regiao_id)
     dist_original = dados_regiao.get("engenharia", {}).get("distancia_backbone_km", 50)
-    capex_original = dados_regiao.get("financeiro", {}).get("capex_reais", 5_000_000)
     orcamento_original = dados_regiao.get("financeiro", {}).get("orcamento_disponivel_reais", 3_000_000)
     pct_economia = dados_regiao.get("parcerias", {}).get("percentual_economia_potencial_pct", 0)
 
     # Reseta o default dos controles numéricos quando a região muda
+    # Usa um key por região para forçar reinicialização do slider ao trocar de região
     regiao_key = f"sim_defaults_{regiao_id}"
     if regiao_key not in st.session_state:
         st.session_state[regiao_key] = True
-        st.session_state["sim_dist_km"] = dist_original
-        st.session_state["sim_teto_reais"] = orcamento_original
+        # Reinicializa slider para a distância da nova região
+        st.session_state[f"sim_dist_km_{regiao_id}"] = dist_original
+        st.session_state[f"sim_teto_reais_{regiao_id}"] = orcamento_original
 
-    # --- Controles ---
+    # --- Seção: E se a infraestrutura chegasse mais perto? ---
     st.divider()
+    st.subheader("🏗️ E se a infraestrutura chegasse mais perto?")
+
+    distancia_km = st.slider(
+        f"📡 Nova distância do backbone (km)  *(atual: {dist_original} km)*",
+        min_value=0,
+        max_value=200,
+        key=f"sim_dist_km_{regiao_id}",
+        help="Simula a chegada de nova infraestrutura de backbone mais próxima.",
+    )
+
+    # --- Seção: demais controles ---
     st.subheader("⚙️ Parâmetros da simulação")
 
-    col_a, col_b = st.columns(2)
-
-    with col_a:
-        distancia_km = st.slider(
-            f"📡 Distância do backbone (km)  *(atual: {dist_original} km)*",
-            min_value=0,
-            max_value=200,
-            key="sim_dist_km",
-            help="Simula a chegada de nova infraestrutura de backbone mais próxima.",
-        )
-
-    with col_b:
-        teto_reais = st.number_input(
-            "💵 Teto de investimento (R$)",
-            min_value=1,
-            step=100_000,
-            key="sim_teto_reais",
-            help="Substitui o orçamento disponível para esta simulação.",
-        )
+    teto_reais = st.number_input(
+        "💵 Teto de investimento (R$)",
+        min_value=1,
+        step=100_000,
+        key=f"sim_teto_reais_{regiao_id}",
+        help="Substitui o orçamento disponível para esta simulação.",
+    )
 
     usar_parcerias = st.checkbox(
         f"🤝 Ativar parcerias do Agente Pontes "
         f"(economia de **{pct_economia}%** no CAPEX)",
         key="sim_usar_parcerias",
     )
+
+    # --- Detecta se o usuário moveu o slider após a última simulação ---
+    resultado_atual = st.session_state.get(f"sim_resultado_{regiao_id}")
+    if resultado_atual:
+        dist_executada = resultado_atual.get("parametros", {}).get("distancia_backbone_km")
+        if dist_executada is not None and dist_executada != distancia_km:
+            st.warning(
+                "⚠️ O slider foi alterado após a última simulação. "
+                "Clique em **Simular cenário** para atualizar o resultado."
+            )
 
     # --- Executar simulação ---
     st.divider()
@@ -240,10 +314,15 @@ def render():
         executar = st.button("▶️ Simular cenário", type="primary", use_container_width=True)
     with col_reset:
         if st.button("🔄 Restaurar cenário base", use_container_width=True):
-            for k in ["sim_dist_km", "sim_teto_reais", "sim_usar_parcerias", "sim_atalho_ativado"]:
+            # Remove resultado e marcador simulado da região
+            if f"sim_resultado_{regiao_id}" in st.session_state:
+                del st.session_state[f"sim_resultado_{regiao_id}"]
+            # Limpa controles
+            for k in [f"sim_dist_km_{regiao_id}", f"sim_teto_reais_{regiao_id}",
+                      "sim_usar_parcerias", "sim_atalho_ativado"]:
                 if k in st.session_state:
                     del st.session_state[k]
-            # Remove defaults para forçar recarga
+            # Remove defaults para forçar recarga na próxima renderização
             if regiao_key in st.session_state:
                 del st.session_state[regiao_key]
             st.rerun()
@@ -267,6 +346,9 @@ def render():
         # Salva resultado na sessão para manter na tela
         st.session_state[f"sim_resultado_{regiao_id}"] = resultado
 
+        # Força rerenderização para o mapa mostrar a nova camada
+        st.rerun()
+
     resultado_atual = st.session_state.get(f"sim_resultado_{regiao_id}")
     if not resultado_atual:
         st.caption("Configure os parâmetros acima e clique em **Simular cenário**.")
@@ -274,6 +356,52 @@ def render():
 
     res_base = resultado_atual["base"]
     res_sim = resultado_atual["simulado"]
+
+    # --- Resumo inline junto ao mapa (exibido logo abaixo dos botões) ---
+    st.divider()
+    st.subheader("📍 Resumo da simulação")
+
+    resumo = _resumo_inline(resultado_atual, dist_original)
+    st.markdown(resumo)
+    st.caption(f"ℹ️ {_AVISO_IBM}")
+
+    # Alerta prioritário do cenário simulado
+    if res_sim.get("atencao_prioritaria"):
+        pontos = res_sim.get("pontos_criticos", [])
+        msg = "🚨 **Atenção Prioritária no cenário simulado**"
+        if pontos:
+            msg += "\n" + "\n".join(f"- {p}" for p in pontos)
+        st.error(msg)
+
+    # Valores antes e depois para cada agente com alteração
+    mudancas = resultado_atual.get("mudancas", [])
+    premissas = resultado_atual.get("premissas", [])
+
+    with st.expander("🔍 Detalhes: antes e depois", expanded=bool(mudancas)):
+        st.markdown("**Engenharia**")
+        eng_base = res_base.get("pareceres", {}).get("engenharia", {}).get("score", "–")
+        eng_sim = res_sim.get("pareceres", {}).get("engenharia", {}).get("score", "–")
+        st.markdown(f"- Score: {eng_base} → {eng_sim}")
+
+        st.markdown("**Score consolidado**")
+        st.markdown(f"- {res_base.get('score_consolidado', '–')} → {res_sim.get('score_consolidado', '–')}")
+
+        st.markdown("**Recomendação**")
+        rec_b = _label_rec(res_base.get("recomendacao"))
+        rec_s = _label_rec(res_sim.get("recomendacao"))
+        st.markdown(f"- {rec_b} → {rec_s}")
+
+        if mudancas:
+            st.markdown("**O que mudou:**")
+            for m in mudancas:
+                st.markdown(f"- {m}")
+        else:
+            st.markdown("*Nenhuma mudança — os parâmetros simulados são idênticos à base.*")
+
+        if premissas:
+            st.markdown("**Premissas aplicadas:**")
+            for p in premissas:
+                st.markdown(f"- {p}")
 
     # --- Resultado lado a lado ---
     st.divider()
@@ -287,20 +415,3 @@ def render():
 
     # --- Gráfico comparativo ---
     _grafico_barras_agentes(res_base, res_sim)
-
-    # --- O que mudou e Premissas ---
-    mudancas = resultado_atual.get("mudancas", [])
-    premissas = resultado_atual.get("premissas", [])
-
-    with st.expander("🔍 O que mudou e Premissas", expanded=bool(mudancas)):
-        if mudancas:
-            st.markdown("**O que mudou:**")
-            for m in mudancas:
-                st.markdown(f"- {m}")
-        else:
-            st.markdown("*Nenhuma mudança — os parâmetros simulados são idênticos à base.*")
-
-        if premissas:
-            st.markdown("**Premissas aplicadas:**")
-            for p in premissas:
-                st.markdown(f"- {p}")
