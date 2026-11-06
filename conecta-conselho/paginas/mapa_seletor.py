@@ -140,6 +140,23 @@ _MAPA = st.components.v2.component(
             const width = 860, height = 380;
             const layers = data.camadas;
             const sim = data.simulacao;  // { dist_original, dist_simulada, recomendacao, regiao_id } | null
+            // recomendacoes: { [id]: { recomendacao, atencao_prioritaria } } | null
+            const recomendacoes = data.recomendacoes || {};
+
+            // Cores por recomendação (mesmas de analise.py _CORES_HEX)
+            const COR_REC = {
+                "realizar_piloto": "#22c55e",   // verde
+                "investir_agora":  "#3b82f6",   // azul
+                "aguardar":        "#f59e0b",   // amarelo
+            };
+            // Opacidade baixa para o preenchimento dos polígonos
+            function hexToFill(hex) {
+                // Converte #rrggbb → rgba com alpha 0.25
+                const r = parseInt(hex.slice(1,3),16);
+                const g = parseInt(hex.slice(3,5),16);
+                const b = parseInt(hex.slice(5,7),16);
+                return `rgba(${r},${g},${b},0.25)`;
+            }
 
             function draw(parent, tag, attrs, text) {
                 const element = document.createElementNS(ns, tag);
@@ -180,15 +197,27 @@ _MAPA = st.components.v2.component(
                 vale_verde: "#dce8ce", esperanca: "#eee6cc", nova_uniao: "#e9ddd9"
             };
             let dragged = false;
+            // Coleta polígonos prioritários para desenhar a borda vermelha depois,
+            // num grupo sem classe .regiao — assim o CSS de estado não a sobrescreve.
+            const prioFeatures = [];
             for (const feature of layers.regiao) {
                 const { id, nome } = feature.properties;
                 const selected = id === data.selecionada;
+                const rec_info = recomendacoes[id];
+                const rec = rec_info && rec_info.recomendacao;
+                const prio = rec_info && rec_info.atencao_prioritaria;
+
+                // Fill: cor da recomendação (translúcida) quando disponível, senão palette
+                const fillColor = (rec && COR_REC[rec]) ? hexToFill(COR_REC[rec]) : palette[id];
+
                 const group = draw(map, "g", {
                     class: "regiao", role: "button", tabindex: 0, "data-id": id,
                     "aria-label": nome, "aria-pressed": selected
                 });
                 draw(group, "path", {
-                    d: path(feature), fill: palette[id], "vector-effect": "non-scaling-stroke"
+                    d: path(feature), fill: fillColor,
+                    "vector-effect": "non-scaling-stroke"
+                    // stroke omitido aqui — o CSS .regiao path cuida da borda normal
                 });
                 draw(group, "title", {}, data.tooltips[id]);
                 const select = () => {
@@ -204,6 +233,24 @@ _MAPA = st.components.v2.component(
                     }
                 });
                 if (focusedId === id) group.focus();
+
+                if (prio) prioFeatures.push(feature);
+            }
+
+            // Borda vermelha para regiões com atencao_prioritaria — grupo separado,
+            // sem classe .regiao, acima dos polígonos para não ser coberta pelo CSS de estado.
+            if (prioFeatures.length > 0) {
+                const prioLayer = draw(map, "g", { "pointer-events": "none", "aria-hidden": "true" });
+                for (const feature of prioFeatures) {
+                    draw(prioLayer, "path", {
+                        d: path(feature),
+                        fill: "none",
+                        stroke: "#dc2626",
+                        "stroke-width": "2.5",
+                        "stroke-linejoin": "round",
+                        "vector-effect": "non-scaling-stroke"
+                    });
+                }
             }
 
             const detail = draw(svg, "g", { "pointer-events": "none", "aria-hidden": "true" });
@@ -252,12 +299,8 @@ _MAPA = st.components.v2.component(
                     const distSim = sim.dist_simulada;
                     const rec = sim.recomendacao;
 
-                    // Cor do marcador simulado conforme recomendação
-                    const corRec = {
-                        "investir_agora": "#16a34a",
-                        "realizar_piloto": "#2563eb",
-                        "aguardar": "#ea580c",
-                    }[rec] || "#6b7280";
+                    // Cor do marcador simulado conforme recomendação (mesmas de analise.py)
+                    const corRec = COR_REC[rec] || "#9ca3af";
 
                     // Ponto de referência da região selecionada (rótulo do GeoJSON)
                     let regiaoRotulo = null;
@@ -423,6 +466,7 @@ def renderizar_seletor_mapa(
     chart_key: str = "mapa_selector",
     camada_simulacao: dict | None = None,
     regiao_selecionada_id: str | None = None,
+    recomendacoes: dict[str, dict] | None = None,
 ) -> str | None:
     """Renderiza o território e sincroniza a escolha entre as páginas.
 
@@ -435,6 +479,9 @@ def renderizar_seletor_mapa(
             a página de Análise).
         regiao_selecionada_id: ID da região selecionada (opcional, sobrescreve
             sessão apenas para passagem explícita de dados ao mapa).
+        recomendacoes: Dicionário ``{regiao_id: {recomendacao, atencao_prioritaria}}``
+            calculado localmente. Quando fornecido, preenche os polígonos com as
+            cores da recomendação e adiciona borda vermelha para atenção prioritária.
     """
     dados_geo = carregar_poligonos()
     nomes = {regiao["id"]: regiao["nome"] for regiao in dados_geo["regioes"]}
@@ -452,7 +499,32 @@ def renderizar_seletor_mapa(
             detalhes.append(f"Cobertura de fibra: {cobertura}%")
         if isinstance(populacao, int):
             detalhes.append(f"População estimada: {populacao:,}".replace(",", "."))
+        # Adiciona recomendação e atenção prioritária ao tooltip quando disponível
+        if recomendacoes:
+            rec_info = recomendacoes.get(regiao_id, {})
+            rec = rec_info.get("recomendacao")
+            prio = rec_info.get("atencao_prioritaria", False)
+            _LABEL_REC = {
+                "realizar_piloto": "Realizar piloto",
+                "investir_agora": "Investir agora",
+                "aguardar": "Aguardar",
+            }
+            if rec:
+                detalhes.append(f"Recomendação: {_LABEL_REC.get(rec, rec)}")
+            if prio:
+                detalhes.append("⚠ Atenção prioritária")
         tooltips[regiao_id] = "\n".join(detalhes)
+
+    # Converte recomendacoes para o formato esperado pelo JS (apenas os campos necessários)
+    recomendacoes_js: dict | None = None
+    if recomendacoes:
+        recomendacoes_js = {
+            rid: {
+                "recomendacao": info.get("recomendacao"),
+                "atencao_prioritaria": bool(info.get("atencao_prioritaria", False)),
+            }
+            for rid, info in recomendacoes.items()
+        }
 
     atual = regiao_selecionada()
     try:
@@ -476,11 +548,17 @@ def renderizar_seletor_mapa(
                 "selecionada": atual,
                 "tooltips": tooltips,
                 "simulacao": camada_simulacao,
+                "recomendacoes": recomendacoes_js,
             },
             key=chart_key,
             on_regiao_change=selecionar_no_mapa,
         )
     st.caption(dados_geo["aviso"])
+    if recomendacoes_js:
+        st.caption(
+            "🟢 Realizar piloto · 🔵 Investir agora · 🟡 Aguardar · "
+            "borda vermelha = atenção prioritária · calculado localmente"
+        )
 
     chave_lista = f"{chart_key}_lista"
 

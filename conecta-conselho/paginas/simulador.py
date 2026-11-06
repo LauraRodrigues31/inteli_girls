@@ -25,6 +25,7 @@ for _p in [str(_ROOT), str(_CC_DIR)]:
 import streamlit as st
 from tools.consultar_regiao import listar_regioes, consultar_regiao  # type: ignore[import]
 from simulador import simular_cenario  # type: ignore[import]
+from integracao import chamar_guardiao  # type: ignore[import]
 from paginas.mapa_seletor import renderizar_seletor_mapa, _SESSION_KEY  # type: ignore[import]
 
 # ---------------------------------------------------------------------------
@@ -47,7 +48,7 @@ _LABELS_RECOMENDACAO = {
 
 _CORES_RECOMENDACAO = {
     "investir_agora":  "green",
-    "realizar_piloto": "blue",
+    "realizar_piloto": "green",
     "aguardar":        "orange",
     None:              "gray",
 }
@@ -59,6 +60,33 @@ _NOMES_AGENTES = {
     "orcamento":      "💰 Orçamento",
     "pontes":         "🤝 Pontes",
 }
+
+
+# ---------------------------------------------------------------------------
+# Cache de recomendações locais para colorir o mapa (item 1)
+# ---------------------------------------------------------------------------
+
+
+@st.cache_data(show_spinner=False)
+def _recomendacoes_mapa_local() -> dict[str, dict]:
+    """
+    Calcula localmente a recomendação do Guardião para todas as regiões.
+    Retorna {regiao_id: {recomendacao, atencao_prioritaria}}.
+    Cacheado pelo Streamlit (sem TTL — recalcula apenas quando o módulo recarrega).
+    """
+    regioes = listar_regioes()
+    resultado: dict[str, dict] = {}
+    for reg in regioes:
+        rid = reg["id"]
+        try:
+            res = chamar_guardiao(rid, fonte="local")
+            resultado[rid] = {
+                "recomendacao": res.get("recomendacao"),
+                "atencao_prioritaria": bool(res.get("atencao_prioritaria", False)),
+            }
+        except Exception:  # noqa: BLE001
+            resultado[rid] = {}
+    return resultado
 
 
 # ---------------------------------------------------------------------------
@@ -230,12 +258,14 @@ def render():
         )
     camada_sim = _camada_simulacao(resultado_para_mapa, dist_original_para_mapa or 0)
 
-    # Renderiza mapa com camada opcional de simulação
+    # Renderiza mapa com camada opcional de simulação e cores por recomendação
+    recomendacoes = _recomendacoes_mapa_local()
     regiao_id_mapa = renderizar_seletor_mapa(
         dados_map,
         chart_key="mapa_simulador",
         camada_simulacao=camada_sim,
         regiao_selecionada_id=regiao_ativa,
+        recomendacoes=recomendacoes,
     )
 
     # Botão de atalho — história do one-pager

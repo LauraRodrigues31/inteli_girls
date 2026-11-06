@@ -87,6 +87,33 @@ _SECOES_INDICADORES = {
 _CACHE_TTL_SEGUNDOS = 6 * 60 * 60  # 6 horas
 
 # ---------------------------------------------------------------------------
+# Cache de recomendações locais para colorir o mapa (item 1)
+# ---------------------------------------------------------------------------
+
+
+@st.cache_data(show_spinner=False)
+def _recomendacoes_mapa_local() -> dict[str, dict]:
+    """
+    Calcula localmente a recomendação do Guardião para todas as regiões.
+    Retorna {regiao_id: {recomendacao, atencao_prioritaria}}.
+    Cacheado pelo Streamlit (sem TTL — recalcula apenas quando o módulo recarrega).
+    """
+    regioes = listar_regioes()
+    resultado: dict[str, dict] = {}
+    for reg in regioes:
+        rid = reg["id"]
+        try:
+            res = chamar_guardiao(rid, fonte="local")
+            resultado[rid] = {
+                "recomendacao": res.get("recomendacao"),
+                "atencao_prioritaria": bool(res.get("atencao_prioritaria", False)),
+            }
+        except Exception:  # noqa: BLE001
+            resultado[rid] = {}
+    return resultado
+
+
+# ---------------------------------------------------------------------------
 # Cache de resultados da nuvem (st.cache_data com TTL de 6 horas)
 # ---------------------------------------------------------------------------
 
@@ -277,7 +304,12 @@ def _secao_selecao() -> tuple[str | None, bool]:
     except Exception:
         dados_mapa = None
 
-    regiao_id = renderizar_seletor_mapa(dados_mapa, chart_key="mapa_analise")
+    recomendacoes = _recomendacoes_mapa_local()
+    regiao_id = renderizar_seletor_mapa(
+        dados_mapa,
+        chart_key="mapa_analise",
+        recomendacoes=recomendacoes,
+    )
     executar = st.button(
         "▶ Executar Conselho",
         type="primary",
