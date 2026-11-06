@@ -3,8 +3,10 @@ Testes de navegação do app Streamlit multi-página.
 
 Verifica que:
   - O roteador (app.py) executa sem exceção via AppTest
-  - Cada página individual (como_funciona, analise, mapa, simulador)
+  - Cada página individual (como_funciona, analise, simulador)
     executa sem exceção quando chamada isoladamente via AppTest.from_string
+  - A página "Mapa ilustrativo" foi removida da navegação (M2 revisada);
+    o seletor de mapa está embutido em analise e simulador.
 
 AVISO: Todos os dados são SIMULADOS e fictícios.
 """
@@ -64,8 +66,6 @@ def _script_pagina(modulo: str) -> str:
 
 @pytest.mark.parametrize("modulo,titulo", [
     ("paginas.como_funciona", "Como funciona"),
-    ("paginas.analise",       "Análise de Região"),
-    ("paginas.mapa",          "Mapa ilustrativo"),
     ("paginas.simulador",     "Simulador de cenários"),
 ])
 class TestPaginasIsoladas:
@@ -76,3 +76,17 @@ class TestPaginasIsoladas:
         assert not at.exception, (
             f"Página '{titulo}' ({modulo}) levantou exceção: {at.exception}"
         )
+
+
+def test_analise_renderiza_comparacao_e_historico_antes_da_selecao():
+    at = AppTest.from_string(_script_pagina("paginas.analise")).run(timeout=15)
+    assert not at.exception
+    assert at.button(key="btn_comparar").label == "⚖️ Comparar"
+    assert any("Nenhuma região analisada nesta sessão" in info.value for info in at.info)
+
+    executar, = [botao for botao in at.button if "Executar Conselho" in botao.label]
+    assert executar.disabled
+    at.selectbox(key="mapa_analise_lista").select("nova_uniao").run(timeout=15)
+    assert not at.exception
+    executar, = [botao for botao in at.button if "Executar Conselho" in botao.label]
+    assert not executar.disabled

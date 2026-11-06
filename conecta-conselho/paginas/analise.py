@@ -27,6 +27,7 @@ import streamlit as st
 
 from tools.consultar_regiao import listar_regioes, consultar_regiao  # type: ignore[import]
 from integracao import chamar_guardiao, _verificar_credenciais_nuvem  # type: ignore[import]
+from paginas.mapa_seletor import renderizar_seletor_mapa, _SESSION_KEY  # type: ignore[import]
 
 # ---------------------------------------------------------------------------
 # Constantes
@@ -84,6 +85,33 @@ _SECOES_INDICADORES = {
 
 # TTL do cache de resultados da nuvem (em segundos)
 _CACHE_TTL_SEGUNDOS = 6 * 60 * 60  # 6 horas
+
+# ---------------------------------------------------------------------------
+# Cache de recomendações locais para colorir o mapa (item 1)
+# ---------------------------------------------------------------------------
+
+
+@st.cache_data(show_spinner=False)
+def _recomendacoes_mapa_local() -> dict[str, dict]:
+    """
+    Calcula localmente a recomendação do Guardião para todas as regiões.
+    Retorna {regiao_id: {recomendacao, atencao_prioritaria}}.
+    Cacheado pelo Streamlit (sem TTL — recalcula apenas quando o módulo recarrega).
+    """
+    regioes = listar_regioes()
+    resultado: dict[str, dict] = {}
+    for reg in regioes:
+        rid = reg["id"]
+        try:
+            res = chamar_guardiao(rid, fonte="local")
+            resultado[rid] = {
+                "recomendacao": res.get("recomendacao"),
+                "atencao_prioritaria": bool(res.get("atencao_prioritaria", False)),
+            }
+        except Exception:  # noqa: BLE001
+            resultado[rid] = {}
+    return resultado
+
 
 # ---------------------------------------------------------------------------
 # Cache de resultados da nuvem (st.cache_data com TTL de 6 horas)
@@ -192,6 +220,8 @@ def _inicializar_estado():
         st.session_state.historico = []
     if "fonte_pareceres" not in st.session_state:
         st.session_state.fonte_pareceres = "local"
+    if _SESSION_KEY not in st.session_state:
+        st.session_state[_SESSION_KEY] = None
 
 
 def _registrar_historico(resultado_guardiao: dict):
@@ -267,25 +297,26 @@ def _seletor_fonte() -> str:
 # ---------------------------------------------------------------------------
 
 
-def _secao_selecao():
+def _secao_selecao() -> tuple[str | None, bool]:
     regioes = listar_regioes()
-    opcoes = {r["id"]: f"{r['nome']} — {r['descricao_perfil']}" for r in regioes}
-    ids = list(opcoes.keys())
+    try:
+        dados_mapa = {regiao["id"]: consultar_regiao(regiao["id"]) for regiao in regioes}
+    except Exception:
+        dados_mapa = None
 
-    col_sel, col_btn = st.columns([3, 1])
-    with col_sel:
-        selecionado = st.selectbox(
-            "Selecione uma região:",
-            options=ids,
-            format_func=lambda x: opcoes[x],
-            key="regiao_selecionada",
-        )
-    with col_btn:
-        st.write("")
-        st.write("")
-        executar = st.button("▶ Executar Conselho", type="primary", width="stretch")
-
-    return selecionado, regioes, executar
+    recomendacoes = _recomendacoes_mapa_local()
+    regiao_id = renderizar_seletor_mapa(
+        dados_mapa,
+        chart_key="mapa_analise",
+        recomendacoes=recomendacoes,
+    )
+    executar = st.button(
+        "▶ Executar Conselho",
+        type="primary",
+        width="stretch",
+        disabled=regiao_id is None,
+    )
+    return regiao_id, executar
 
 
 def _secao_indicadores(regiao_id: str):
@@ -895,6 +926,87 @@ def _secao_comparar(fonte: str):
         _radar_duplo(pareceres_a, pareceres_b, nome_a, nome_b)
 
 
+def _render_analise_regiao(regiao_id: str, fonte: str, executar: bool):
+    _secao_indicadores(regiao_id)
+
+    if executar:
+        if fonte == "nuvem":
+            # Item 6 — st.status mostrando cada agente ao terminar
+            agentes_status: dict[str, tuple[bool, float]] = {}
+            status_container = st.status("Executando Conselho na nuvem...", expanded=True)
+
+            def _ao_concluir_agente(nome: str, sucesso: bool, tempo: float):
+                icone = "✅" if sucesso else "❌"
+                status_container.write(f"{icone} {nome} — {tempo:.1f} s")
+                agentes_status[nome] = (sucesso, tempo)
+
+            try:
+                resultado, veio_do_cache = _consultar_nuvem(
+                    regiao_id, fonte, ao_concluir_agente=_ao_concluir_agente
+                )
+                # Se veio do cache o callback não dispara — mostra mensagem adequada
+                if veio_do_cache:
+                    status_container.write("📦 Resultado carregado do cache.")
+                status_container.update(label="Conselho concluído!", state="complete")
+                st.session_state[f"resultado_{regiao_id}"] = resultado
+                st.session_state[f"cache_{regiao_id}"] = veio_do_cache
+                _registrar_historico(resultado)
+                if resultado.get("status") == "analise_incompleta":
+                    st.warning("Análise incompleta — verifique os agentes com falha.")
+                elif resultado.get("erro"):
+                    st.error(f"Erro ao analisar região: {resultado['erro']}")
+                else:
+                    st.success(f"Análise concluída para {resultado.get('regiao_nome', regiao_id)}!")
+            except Exception as e:
+                status_container.update(label="Erro no Conselho", state="error")
+                st.error(f"Erro inesperado: {e}")
+        else:
+            with st.spinner(f"Executando o Conselho para {regiao_id}..."):
+                try:
+                    resultado = chamar_guardiao(regiao_id, fonte=fonte)
+                    veio_do_cache = False
+                    st.session_state[f"resultado_{regiao_id}"] = resultado
+                    st.session_state[f"cache_{regiao_id}"] = veio_do_cache
+                    _registrar_historico(resultado)
+                    if resultado.get("status") == "analise_incompleta":
+                        st.warning("Análise incompleta — verifique os agentes com falha.")
+                    elif resultado.get("erro"):
+                        st.error(f"Erro ao analisar região: {resultado['erro']}")
+                    else:
+                        st.success(f"Análise concluída para {resultado.get('regiao_nome', regiao_id)}!")
+                except Exception as e:
+                    st.error(f"Erro inesperado: {e}")
+
+    resultado_atual = st.session_state.get(f"resultado_{regiao_id}")
+
+    # Botão "Consultar a IBM novamente" — limpa cache só desta região e re-executa
+    if resultado_atual and resultado_atual.get("fonte") == "nuvem":
+        col_cache, _ = st.columns([2, 3])
+        with col_cache:
+            if st.button(
+                "🔄 Consultar a IBM novamente",
+                key=f"refetch_{regiao_id}",
+                help="Ignora o cache e busca uma nova análise na nuvem.",
+            ):
+                with st.spinner(f"Consultando a IBM para {regiao_id}..."):
+                    try:
+                        resultado_atual, veio_do_cache = _consultar_nuvem(
+                            regiao_id, "nuvem", ignorar_cache=True
+                        )
+                        st.session_state[f"resultado_{regiao_id}"] = resultado_atual
+                        st.session_state[f"cache_{regiao_id}"] = veio_do_cache
+                        _registrar_historico(resultado_atual)
+                        st.success("Nova consulta concluída!")
+                    except Exception as e:
+                        st.error(f"Erro ao reconsultar: {e}")
+
+    if resultado_atual:
+        _secao_resultado(
+            resultado_atual,
+            veio_do_cache=st.session_state.get(f"cache_{regiao_id}", False),
+        )
+
+
 # ---------------------------------------------------------------------------
 # Ponto de entrada da página
 # ---------------------------------------------------------------------------
@@ -916,85 +1028,9 @@ def render():
     ])
 
     with aba_analise:
-        regiao_id, regioes, executar = _secao_selecao()
-        _secao_indicadores(regiao_id)
-
-        if executar:
-            if fonte == "nuvem":
-                # Item 6 — st.status mostrando cada agente ao terminar
-                agentes_status: dict[str, tuple[bool, float]] = {}
-                status_container = st.status("Executando Conselho na nuvem...", expanded=True)
-
-                def _ao_concluir_agente(nome: str, sucesso: bool, tempo: float):
-                    icone = "✅" if sucesso else "❌"
-                    status_container.write(f"{icone} {nome} — {tempo:.1f} s")
-                    agentes_status[nome] = (sucesso, tempo)
-
-                try:
-                    resultado, veio_do_cache = _consultar_nuvem(
-                        regiao_id, fonte, ao_concluir_agente=_ao_concluir_agente
-                    )
-                    # Se veio do cache o callback não dispara — mostra mensagem adequada
-                    if veio_do_cache:
-                        status_container.write("📦 Resultado carregado do cache.")
-                    status_container.update(label="Conselho concluído!", state="complete")
-                    st.session_state[f"resultado_{regiao_id}"] = resultado
-                    st.session_state[f"cache_{regiao_id}"] = veio_do_cache
-                    _registrar_historico(resultado)
-                    if resultado.get("status") == "analise_incompleta":
-                        st.warning("Análise incompleta — verifique os agentes com falha.")
-                    elif resultado.get("erro"):
-                        st.error(f"Erro ao analisar região: {resultado['erro']}")
-                    else:
-                        st.success(f"Análise concluída para {resultado.get('regiao_nome', regiao_id)}!")
-                except Exception as e:
-                    status_container.update(label="Erro no Conselho", state="error")
-                    st.error(f"Erro inesperado: {e}")
-            else:
-                with st.spinner(f"Executando o Conselho para {regiao_id}..."):
-                    try:
-                        resultado = chamar_guardiao(regiao_id, fonte=fonte)
-                        veio_do_cache = False
-                        st.session_state[f"resultado_{regiao_id}"] = resultado
-                        st.session_state[f"cache_{regiao_id}"] = veio_do_cache
-                        _registrar_historico(resultado)
-                        if resultado.get("status") == "analise_incompleta":
-                            st.warning("Análise incompleta — verifique os agentes com falha.")
-                        elif resultado.get("erro"):
-                            st.error(f"Erro ao analisar região: {resultado['erro']}")
-                        else:
-                            st.success(f"Análise concluída para {resultado.get('regiao_nome', regiao_id)}!")
-                    except Exception as e:
-                        st.error(f"Erro inesperado: {e}")
-
-        resultado_atual = st.session_state.get(f"resultado_{regiao_id}")
-
-        # Botão "Consultar a IBM novamente" — limpa cache só desta região e re-executa
-        if resultado_atual and resultado_atual.get("fonte") == "nuvem":
-            col_cache, _ = st.columns([2, 3])
-            with col_cache:
-                if st.button(
-                    "🔄 Consultar a IBM novamente",
-                    key=f"refetch_{regiao_id}",
-                    help="Ignora o cache e busca uma nova análise na nuvem.",
-                ):
-                    with st.spinner(f"Consultando a IBM para {regiao_id}..."):
-                        try:
-                            resultado_atual, veio_do_cache = _consultar_nuvem(
-                                regiao_id, "nuvem", ignorar_cache=True
-                            )
-                            st.session_state[f"resultado_{regiao_id}"] = resultado_atual
-                            st.session_state[f"cache_{regiao_id}"] = veio_do_cache
-                            _registrar_historico(resultado_atual)
-                            st.success("Nova consulta concluída!")
-                        except Exception as e:
-                            st.error(f"Erro ao reconsultar: {e}")
-
-        if resultado_atual:
-            _secao_resultado(
-                resultado_atual,
-                veio_do_cache=st.session_state.get(f"cache_{regiao_id}", False),
-            )
+        regiao_id, executar = _secao_selecao()
+        if regiao_id is not None:
+            _render_analise_regiao(regiao_id, fonte, executar)
 
     with aba_comparar:
         st.caption(_AVISO_SIMULADO)

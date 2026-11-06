@@ -375,10 +375,9 @@ A decisão final é sempre de uma pessoa.
     paginas = criar_paginas()
     _links = [
         ("analise",   "Analise uma região com os 5 agentes."),
-        ("mapa",      "Veja todas as regiões no mapa."),
-        ("simulador", "Teste cenários hipotéticos."),
+        ("simulador", "Teste cenários hipotéticos e simule o mapa."),
     ]
-    for col, (chave, help_txt) in zip(st.columns(3), _links):
+    for col, (chave, help_txt) in zip(st.columns(2), _links):
         with col:
             st.page_link(paginas[chave], help=help_txt)
 
