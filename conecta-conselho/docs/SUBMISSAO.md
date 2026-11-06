@@ -5,10 +5,12 @@
 > Não representam indicadores reais de nenhuma região, operadora ou instituição brasileira.
 > Não há dados pessoais no sistema.
 
+**🔗 Protótipo público:** https://conecta-conselho.streamlit.app
+
 ---
 
 ## TEXTO 1 — Problem and Solution Statement
-*(máximo 500 palavras — contagem real da versão em inglês: **414 palavras**)*
+*(máximo 500 palavras — contagem real da versão em inglês: **431 palavras**)*
 
 ### Versão em inglês
 
@@ -18,7 +20,7 @@ Telecom operators must decide where to expand connectivity. Current planning pro
 
 The analyst opens the dashboard, selects a region, and immediately sees five independent expert opinions — one per agent — covering market return, social impact, engineering feasibility, budget viability, and anchor partnerships. A deterministic Guardian consolidates these opinions into a single score and one of three recommendations: **Invest now**, **Start with a pilot**, or **Wait**. When any dimension scores critically low, the system raises a **Priority Alert** to flag that human review is essential before any decision is made.
 
-The interaction is straightforward: the analyst chooses a region, reads the five views, examines the Guardian's reasoning, explores the **What-if Simulator** (e.g., "what if a partnership reduced CAPEX by 28%?"), and views the **Illustrative Map** showing all regions sized by population and colored by recommendation. Every screen carries a "simulated data" disclaimer. The analyst can export a structured JSON report with all scores, indicators, divergences, and audit trail.
+The interaction is straightforward: the analyst chooses a region, reads the five views, examines the Guardian's reasoning, explores the **What-if Simulator** (e.g., "what if a partnership reduced CAPEX by 28%?"), and views the **interactive map** in the Analysis and Simulator pages: the analyst picks the region by clicking on the map, which is colored by the Guardian's recommendation, with a red border for priority attention. Every screen carries a "simulated data" disclaimer. The analyst can export a structured JSON report with all scores, indicators, divergences, and audit trail.
 
 What makes Conecta Conselho creative is the design choice to give agents **opposing mandates on purpose**: the Market Agent defends financial return while the Social Impact Agent defends schools and clinics, so no recommendation can be purely profit-driven. The Bridges Agent actively searches for anchor clients (schools, health units, city halls) that could make an unviable region viable — and the Simulator proves it: the Esperança region goes from "Wait" (score 44) to "Start pilot" (score 50) when partnerships are factored in.
 
@@ -36,7 +38,7 @@ O **Conecta Conselho** é um sistema multiagente de apoio à decisão que ajuda 
 
 O analista abre o dashboard, seleciona uma região e vê imediatamente cinco pareceres especializados e independentes — um por agente — cobrindo retorno de mercado, impacto social, viabilidade de engenharia, viabilidade orçamentária e parcerias âncora. Um Guardião determinístico consolida esses pareceres em um score único e uma de três recomendações: **Investir agora**, **Realizar piloto** ou **Aguardar**. Quando qualquer dimensão atinge um patamar crítico, o sistema emite um **Alerta de Atenção Prioritária** sinalizando que a revisão humana é essencial antes de qualquer decisão.
 
-A interação é direta: o analista escolhe uma região, lê os cinco pareceres, examina o raciocínio do Guardião, explora o **Simulador de Cenários** (ex.: "e se uma parceria reduzisse o CAPEX em 28%?") e visualiza o **Mapa Ilustrativo** mostrando todas as regiões dimensionadas por população e coloridas pela recomendação. Toda tela exibe o aviso "dados simulados". O analista pode exportar um relatório JSON estruturado com todos os scores, indicadores, divergências e trilha de auditoria.
+A interação é direta: o analista escolhe uma região, lê os cinco pareceres, examina o raciocínio do Guardião, explora o **Simulador de Cenários** (ex.: "e se uma parceria reduzisse o CAPEX em 28%?") e visualiza o **mapa interativo na Análise e no Simulador**: a pessoa escolhe a região clicando no mapa, colorido pela recomendação do Guardião, com borda vermelha para atenção prioritária. Toda tela exibe o aviso "dados simulados". O analista pode exportar um relatório JSON estruturado com todos os scores, indicadores, divergências e trilha de auditoria.
 
 O que torna o Conecta Conselho criativo é a escolha de design de dar aos agentes **mandatos opostos de propósito**: o Agente de Mercado defende o retorno financeiro enquanto o Agente de Impacto Social defende escolas e postos de saúde, para que nenhuma recomendação seja puramente orientada ao lucro. O Agente de Pontes busca ativamente clientes âncora (escolas, unidades de saúde, prefeituras) que possam tornar uma região inviável em viável — e o Simulador prova isso: a região Esperança passa de "Aguardar" (score 44) para "Realizar piloto" (score 50) quando as parcerias são consideradas.
 
@@ -48,6 +50,8 @@ A demonstração usa **dados inteiramente simulados e fictícios**. Nenhum dado 
 
 ## TEXTO 2 — Technology Statement
 *(objetivo e específico)*
+
+**🔗 Protótipo público:** https://conecta-conselho.streamlit.app
 
 ### Versão em inglês
 
@@ -61,7 +65,7 @@ IBM Bob was central to every development phase of Conecta Conselho. We used the 
 - **Self-contained tool generator:** Bob designed and implemented `scripts/gerar_ferramenta_nuvem.py`, which embeds `regioes.json` as a Python dictionary inside the tool file, eliminating `ModuleNotFoundError` in the cloud runtime's isolated execution environment.
 - **Publication and test scripts:** Bob created `scripts/publicar_agente.ps1` (PowerShell) and `scripts/testar_agente_nuvem.py`, which discover the agent ID dynamically via `orchestrate agents list -v` and test any agent against the IBM runtime API without hardcoding UUIDs or credentials.
 - **Streamlit integration:** Bob implemented the multi-source integration layer (`integracao.py`, `cliente_nuvem.py`) that calls the five agents in parallel using a `ThreadPoolExecutor` (5 concurrent calls), consolidates results locally, and presents two modes the user explicitly chooses between: **IBM watsonx Orchestrate** and **Local** (the demo's plan B).
-- **Test coverage:** Bob authored and maintained the automated test suite, which currently counts **more than 880 passing tests** covering all agent tools, the Guardian, integration mocks, and the Streamlit interface.
+- **Test coverage:** Bob authored and maintained the automated test suite, which currently counts **over a thousand automated tests** covering all agent tools, the Guardian, integration mocks, the Streamlit interface, the interactive map, region comparison, and the live IBM call status panel.
 
 **IBM watsonx Orchestrate**
 
@@ -71,10 +75,28 @@ IBM Bob was central to every development phase of Conecta Conselho. We used the 
 - **Publication:** via `orchestrate tools import -k python` and `orchestrate agents import -f agents/agente_<name>.yaml`.
 - **Runtime API:** Streamlit calls agents in parallel via `POST <WXO_URL>/v1/orchestrate/<agent_id>/chat/completions` with IBM IAM authentication. The Guardian consolidation runs locally in Python — not in the cloud.
 - **Architectural decision:** We tested a Guardian agent with collaborators in watsonx Orchestrate. The agent received the five specialist opinions but did not reliably call the consolidation tool — it returned incomplete or reformatted results. We moved the consolidation to a deterministic Python function (`consolidar_pareceres` in `tools/tool_guardiao.py`), which is consistent, testable, and auditable.
+- **Public prototype:** https://conecta-conselho.streamlit.app (Streamlit Community Cloud, branch `develop` during testing — will switch to `main` on release day).
+
+**Verified features in the live app**
+
+The following features were confirmed present in the deployed prototype:
+
+- ✅ 3 pages: **Como funciona** (How it works, interactive — default page), **Análise de Região** (Region Analysis), **Simulador de cenários** (What-if Simulator) — the interactive map lives inside Analysis and Simulator; the analyst picks the region by clicking on it, colored by the Guardian's recommendation, with a red border for priority attention
+- ✅ **Priority Alert** with `pontos_criticos` list, displayed on analysis page
+- ✅ **Motivos** (reasons to wait) and **Caminhos** (paths to viability) when recommendation is "Wait"
+- ✅ **JSON report download** (audit trail) after each analysis
+- ✅ **Simulator** with "▶️ História do one-pager: Esperança com parcerias" shortcut button — confirms Esperança 44 → 50
+- ✅ **Result cache** (6-hour TTL) with "🔄 Consultar a IBM novamente" button
+- ✅ **Scenario comparison chart** (grouped bar chart, Plotly) in the Simulator
+- ✅ **Radar chart** of the 5 agents' scores in the Analysis page
+- ✅ **Live IBM call status panel** showing the real-time status of all 5 IBM watsonx Orchestrate calls
+- ✅ **Ranking** (historical ranking of all regions by Guardian score)
+- ✅ **Region comparison** (side-by-side comparison of two regions)
+- ✅ **Interactive map** in Analysis and Simulator (colored by recommendation; red border = priority attention)
 
 **Other technologies**
 
-- Python 3.12, Streamlit (multi-page with `st.navigation`), Plotly (scenario comparison chart in the Simulator), pytest (880+ tests), GitHub (branch-per-feature, PR to `develop`, Laura merges and releases to `main`).
+- Python 3.12, Streamlit (multi-page with `st.navigation`), Plotly (scenario comparison chart and radar chart), pytest (**over a thousand automated tests**), GitHub (branch-per-feature, PR to `develop`, Laura merges and releases to `main`).
 
 ---
 
@@ -90,7 +112,7 @@ O IBM Bob foi central em todas as fases de desenvolvimento do Conecta Conselho. 
 - **Gerador de ferramentas autocontidas:** o Bob projetou e implementou `scripts/gerar_ferramenta_nuvem.py`, que embute `regioes.json` como dicionário Python dentro do arquivo da ferramenta, eliminando o `ModuleNotFoundError` no ambiente de execução isolado do runtime em nuvem.
 - **Scripts de publicação e teste:** o Bob criou `scripts/publicar_agente.ps1` (PowerShell) e `scripts/testar_agente_nuvem.py`, que descobrem o ID do agente dinamicamente via `orchestrate agents list -v` e testam qualquer agente contra a API de runtime da IBM sem hardcode de UUIDs ou credenciais.
 - **Integração com o Streamlit:** o Bob implementou a camada de integração multi-fonte (`integracao.py`, `cliente_nuvem.py`) que chama os cinco agentes em paralelo usando um `ThreadPoolExecutor` (5 chamadas simultâneas), consolida os resultados localmente e apresenta dois modos que o usuário escolhe explicitamente: **IBM watsonx Orchestrate** e **Local** (plano B da demo).
-- **Cobertura de testes:** o Bob escreveu e manteve a suíte de testes automatizados, que atualmente conta com **mais de 880 testes passando**, cobrindo todas as ferramentas dos agentes, o Guardião, mocks de integração e a interface Streamlit.
+- **Cobertura de testes:** o Bob escreveu e manteve a suíte de testes automatizados, que atualmente conta com **mais de mil testes automatizados**, cobrindo todas as ferramentas dos agentes, o Guardião, mocks de integração, a interface Streamlit, o mapa interativo, a comparação de regiões e o painel de status ao vivo das chamadas à IBM.
 
 **IBM watsonx Orchestrate**
 
@@ -100,11 +122,29 @@ O IBM Bob foi central em todas as fases de desenvolvimento do Conecta Conselho. 
 - **Publicação:** via `orchestrate tools import -k python` e `orchestrate agents import -f agents/agente_<nome>.yaml`.
 - **API de runtime:** o Streamlit chama os agentes em paralelo via `POST <WXO_URL>/v1/orchestrate/<agent_id>/chat/completions` com autenticação IBM IAM. A consolidação do Guardião roda localmente em Python — não na nuvem.
 - **Decisão de arquitetura:** testamos um agente Guardião com colaboradores no watsonx Orchestrate. O agente recebia os cinco pareceres mas não chamava a ferramenta de consolidação de forma confiável — devolvia resultados incompletos ou reformatados. Movemos a consolidação para uma função Python determinística (`consolidar_pareceres` em `tools/tool_guardiao.py`), que é consistente, testável e auditável.
+- **Protótipo público:** https://conecta-conselho.streamlit.app (Streamlit Community Cloud, branch `develop` durante os testes — passará para `main` no dia do release).
+
+**Funcionalidades confirmadas no app ao vivo**
+
+As seguintes funcionalidades foram verificadas no protótipo publicado:
+
+- ✅ 3 páginas: **Como funciona** (interativa, página inicial), **Análise de Região**, **Simulador de cenários** — o mapa interativo vive dentro da Análise e do Simulador; a pessoa escolhe a região clicando no mapa, colorido pela recomendação do Guardião, com borda vermelha para atenção prioritária
+- ✅ **Alerta de Atenção Prioritária** com lista de `pontos_criticos`
+- ✅ **Motivos** (por que aguardar) e **Caminhos** (para viabilizar) quando a recomendação é "Aguardar"
+- ✅ **Download do relatório JSON** (trilha de auditoria) após cada análise
+- ✅ **Simulador** com botão de atalho "▶️ História do one-pager: Esperança com parcerias" — confirma Esperança 44 → 50
+- ✅ **Cache de resultados** (TTL 6 horas) com botão "🔄 Consultar a IBM novamente"
+- ✅ **Gráfico comparativo de cenários** (barras agrupadas, Plotly) no Simulador
+- ✅ **Radar dos 5 agentes** na página de Análise
+- ✅ **Painel de status ao vivo** das 5 chamadas à IBM watsonx Orchestrate
+- ✅ **Ranking** (histórico de todas as regiões por score do Guardião)
+- ✅ **Comparação de regiões** (comparação lado a lado de duas regiões)
+- ✅ **Mapa interativo** na Análise e no Simulador (colorido pela recomendação; borda vermelha = atenção prioritária)
 
 **Outras tecnologias**
 
-Python 3.12, Streamlit (multi-página com `st.navigation`), Plotly (gráfico de comparação de cenários no Simulador), pytest (mais de 880 testes), GitHub (branch por funcionalidade, PR para `develop`, Laura faz merges e release para `main`).
+Python 3.12, Streamlit (multi-página com `st.navigation`), Plotly (gráfico de comparação de cenários e radar), pytest (**mais de mil testes automatizados**), GitHub (branch por funcionalidade, PR para `develop`, Laura faz merges e release para `main`).
 
 ---
 
-*Versão 2 — 05/11/2026. Atualizado com resultado do teste Granite (L1) e revisões do PR #19. Versão final após merges das páginas.*
+*Versão 4 — 06/11/2026. 3 páginas; mapa interativo dentro da Análise e do Simulador; radar dos 5 agentes, status ao vivo das chamadas IBM, ranking, comparação de regiões e mapa interativo adicionados às funcionalidades verificadas; contagem de testes atualizada para mais de mil; prints definitivos.*
