@@ -123,6 +123,25 @@ Fonte dos pareceres (barra lateral):
 
 As variáveis são lidas primeiro do ambiente do processo e depois do `.env` na raiz.
 
+#### Cartografia fictícia
+
+O mapa da Análise de Região e do Simulador lê `conecta-conselho/data/territorio_ficticio.geojson`.
+As feições são organizadas por `properties.camada`, incluindo regiões, litoral, rios,
+vias, áreas protegidas, relevo, núcleos urbanos e fibra. Para regenerar o arquivo
+a partir da malha de referência, na raiz do projeto execute:
+
+```powershell
+python scripts/gerar_geografia_ficticia.py
+```
+
+O gerador usa apenas a biblioteca padrão do Python. A semente é fixa, e cada
+trecho compartilhado é detalhado uma vez e reutilizado pelas regiões vizinhas.
+O arquivo GeoJSON usa uma origem angular fictícia em `(0, 0)`, codificando a
+malha local como `[x / 1000, -y / 1000]`. O componente converte esses valores
+de volta para o plano de desenho. Por isso, a carta tem orientação norte e
+zoom, mas não usa escala em quilômetros. As distâncias e os indicadores
+exibidos são os da base simulada. Todas as camadas são locais.
+
 ### Deploy no Streamlit Cloud
 
 1. Em *Create app*, aponte para este repositório, branch `main` e arquivo `conecta-conselho/app.py`.
