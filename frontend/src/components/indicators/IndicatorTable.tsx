@@ -1,5 +1,5 @@
 import React from 'react'
-import { StructuredList, StructuredListHead, StructuredListRow, StructuredListCell, StructuredListBody } from '@carbon/react'
+import { StructuredListWrapper, StructuredListHead, StructuredListRow, StructuredListCell, StructuredListBody } from '@carbon/react'
 
 interface Row {
   label: string
@@ -38,7 +38,7 @@ export function IndicatorTable({ data }: IndicatorTableProps) {
   const rows = Object.entries(data)
 
   return (
-    <StructuredList>
+    <StructuredListWrapper>
       <StructuredListHead>
         <StructuredListRow head>
           <StructuredListCell head>Indicador</StructuredListCell>
@@ -63,6 +63,6 @@ export function IndicatorTable({ data }: IndicatorTableProps) {
           </StructuredListRow>
         ))}
       </StructuredListBody>
-    </StructuredList>
+    </StructuredListWrapper>
   )
 }

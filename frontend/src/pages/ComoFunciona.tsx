@@ -14,7 +14,7 @@ import {
   Settings,
   Finance,
   Partnership,
-  Shield,
+  DocumentProtected,
   Checkmark,
   Chemistry,
   Time,
@@ -67,7 +67,7 @@ const AGENTS = [
   {
     key: 'guardiao',
     label: 'Guardião',
-    Icon: Shield,
+    Icon: DocumentProtected,
     mandate: 'Sintetiza e decide',
     question: 'O que fazemos?',
     color: '#da1e28',

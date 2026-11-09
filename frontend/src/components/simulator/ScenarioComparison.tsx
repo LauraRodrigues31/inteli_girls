@@ -1,5 +1,5 @@
 import React from 'react'
-import { Tile, InlineNotification, StructuredList, StructuredListRow, StructuredListCell, StructuredListBody } from '@carbon/react'
+import { Tile, InlineNotification, StructuredListWrapper, StructuredListRow, StructuredListCell, StructuredListBody } from '@carbon/react'
 import {
   BarChart,
   Bar,
@@ -104,7 +104,7 @@ export function ScenarioComparison({ base, parcerias }: ScenarioComparisonProps)
       {/* Key metrics table */}
       <Tile style={{ padding: '20px' }}>
         <p style={{ fontWeight: 600, marginBottom: '12px' }}>Comparativo de métricas</p>
-        <StructuredList>
+        <StructuredListWrapper>
           <StructuredListBody>
             <StructuredListRow>
               <StructuredListCell>Score Base</StructuredListCell>
@@ -136,7 +136,7 @@ export function ScenarioComparison({ base, parcerias }: ScenarioComparisonProps)
               </StructuredListCell>
             </StructuredListRow>
           </StructuredListBody>
-        </StructuredList>
+        </StructuredListWrapper>
       </Tile>
 
       {/* Grouped bar chart */}
