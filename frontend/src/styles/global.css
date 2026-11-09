@@ -1,0 +1,123 @@
+/* ── IBM Plex Sans ───────────────────────────────────────────────────────── */
+/* Loaded via index.html <link> for better performance */
+
+/* ── Root variables ──────────────────────────────────────────────────────── */
+:root {
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+  /* Score / recommendation colors */
+  --score-invest: #24a148;
+  --score-pilot: #0043ce;
+  --score-wait: #a16207;
+  --score-human: #da1e28;
+
+  /* IBM design tokens */
+  --ibm-blue-60: #0043ce;
+  --ibm-gray-100: #161616;
+  --ibm-gray-10: #f4f4f4;
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  background-color: #ffffff;
+  color: #161616;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Carbon overrides ────────────────────────────────────────────────────── */
+
+/* Ensure Carbon header is always on top */
+.cds--header {
+  z-index: 8000 !important;
+}
+
+/* Sticky banner sits just below header */
+.simulated-banner {
+  position: sticky;
+  top: 48px;
+  z-index: 999;
+}
+
+/* Remove default Carbon content padding on page-level wrappers */
+.cds--content {
+  background: #ffffff;
+}
+
+/* Leaflet map tooltip */
+.cc-tooltip {
+  font-family: var(--font-sans) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  background: #161616 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 4px 10px !important;
+}
+
+.cc-tooltip::before {
+  display: none;
+}
+
+/* Leaflet zoom controls */
+.leaflet-control-zoom a {
+  font-family: var(--font-sans) !important;
+}
+
+/* Smooth ProgressBar animation */
+.score-bar-fill {
+  transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Tile hover interaction */
+.cds--tile:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f4f4f4;
+}
+::-webkit-scrollbar-thumb {
+  background: #c6c6c6;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8d8d8d;
+}
+
+/* ── Utilities ───────────────────────────────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
