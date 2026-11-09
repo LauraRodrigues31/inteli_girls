@@ -1,21 +1,28 @@
 /* ── IBM Plex Sans ───────────────────────────────────────────────────────── */
 /* Loaded via index.html <link> for better performance */
 
-/* ── Root variables ──────────────────────────────────────────────────────── */
+/* ── Root variables (aligned with Conecta Conselho deck palette) ─────────── */
 :root {
   --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
 
+  /* IBM Blue scale */
+  --ibm-blue-70:  #001141;
+  --ibm-blue-60:  #0f62fe;
+  --ibm-blue-50:  #4589ff;
+  --ibm-blue-40:  #a8c7fa;
+
+  /* IBM Gray scale */
+  --ibm-gray-100: #0a0a0a;
+  --ibm-gray-90:  #161616;
+  --ibm-gray-80:  #262626;
+  --ibm-gray-10:  #f4f4f4;
+
   /* Score / recommendation colors */
   --score-invest: #24a148;
-  --score-pilot: #0043ce;
-  --score-wait: #a16207;
-  --score-human: #da1e28;
-
-  /* IBM design tokens */
-  --ibm-blue-60: #0043ce;
-  --ibm-gray-100: #161616;
-  --ibm-gray-10: #f4f4f4;
+  --score-pilot:  #0f62fe;
+  --score-wait:   #a16207;
+  --score-human:  #da1e28;
 }
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
@@ -45,53 +52,56 @@ body {
 
 /* ── Carbon overrides ────────────────────────────────────────────────────── */
 
-/* Ensure Carbon header is always on top */
+/* Carbon header always on top */
 .cds--header {
   z-index: 8000 !important;
+  background: #0a0a0a !important;
+  border-bottom: 1px solid #1a2a4a !important;
 }
 
-/* Sticky banner sits just below header */
+/* Header name text */
+.cds--header__name {
+  color: #ffffff !important;
+}
+.cds--header__name:hover {
+  background: rgba(255,255,255,0.05) !important;
+}
+
+/* Header nav items */
+.cds--header__nav .cds--header__menu-item {
+  color: #a8c7fa !important;
+}
+.cds--header__nav .cds--header__menu-item:hover,
+.cds--header__nav .cds--header__menu-item[aria-current='page'] {
+  color: #ffffff !important;
+  background: rgba(15,98,254,0.15) !important;
+  border-bottom-color: #0f62fe !important;
+}
+
+/* Remove default Carbon content padding */
+.cds--content {
+  background: #ffffff;
+  padding: 0 !important;
+}
+
+/* Sticky simulated-data banner */
 .simulated-banner {
   position: sticky;
   top: 48px;
   z-index: 999;
 }
 
-/* Remove default Carbon content padding on page-level wrappers */
-.cds--content {
-  background: #ffffff;
+/* Tile hover */
+.cds--tile:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
-/* Leaflet map tooltip */
-.cc-tooltip {
-  font-family: var(--font-sans) !important;
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  background: #161616 !important;
-  color: #ffffff !important;
-  border: none !important;
-  border-radius: 4px !important;
-  padding: 4px 10px !important;
-}
-
-.cc-tooltip::before {
-  display: none;
-}
-
-/* Leaflet zoom controls */
-.leaflet-control-zoom a {
-  font-family: var(--font-sans) !important;
-}
-
-/* Smooth ProgressBar animation */
+/* Animated score bar */
 .score-bar-fill {
   transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Tile hover interaction */
-.cds--tile:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
+/* ── SVG map tooltip (hover card is now in React, no Leaflet) ────────────── */
 
 /* ── Scrollbar ───────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {

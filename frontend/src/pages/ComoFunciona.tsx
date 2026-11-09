@@ -113,54 +113,108 @@ export default function ComoFunciona() {
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <div
         style={{
-          background: 'linear-gradient(135deg, #161616 0%, #262626 100%)',
-          padding: '72px 24px',
+          background: 'linear-gradient(145deg, #0a0a0a 0%, #001141 50%, #0f3460 100%)',
+          padding: '80px 24px 72px',
           color: '#ffffff',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <Tag type="blue" size="sm" style={{ marginBottom: '16px' }}>
-            IBM SkillsBuild · Trilha 3 · Telecomunicações Inteligentes
-          </Tag>
+        {/* Decorative IBM blue accent bar */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: '3px',
+          background: 'linear-gradient(90deg, #0f62fe 0%, #4589ff 50%, #0f62fe 100%)',
+        }} />
+
+        {/* Background subtle grid */}
+        <div style={{
+          position: 'absolute', inset: 0, opacity: 0.04,
+          backgroundImage: 'repeating-linear-gradient(0deg, #fff 0px, #fff 1px, transparent 1px, transparent 48px), repeating-linear-gradient(90deg, #fff 0px, #fff 1px, transparent 1px, transparent 48px)',
+          pointerEvents: 'none',
+        }} />
+
+        <div style={{ maxWidth: '900px', margin: '0 auto', position: 'relative' }}>
+          <p style={{
+            fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em',
+            color: '#4589ff', textTransform: 'uppercase', marginBottom: '20px',
+          }}>
+            IBM SkillsBuild · Trilha 3 · 2024
+          </p>
+
           <h1
             style={{
-              fontSize: 'clamp(32px, 5vw, 56px)',
+              fontSize: 'clamp(40px, 6vw, 68px)',
               fontWeight: 700,
-              lineHeight: 1.15,
-              marginBottom: '16px',
+              lineHeight: 1.05,
+              marginBottom: '12px',
               fontFamily: 'IBM Plex Sans, sans-serif',
+              letterSpacing: '-0.02em',
             }}
           >
-            Conecta Conselho
+            Conecta<br />
+            <span style={{ color: '#4589ff' }}>Conselho</span>
           </h1>
-          <p
-            style={{
-              fontSize: '18px',
-              color: '#c6c6c6',
-              maxWidth: '600px',
-              lineHeight: 1.7,
-              marginBottom: '32px',
-            }}
-          >
-            Sistema multiagente de apoio à decisão que reúne cinco perspectivas
-            especializadas para que <strong style={{ color: '#fff' }}>nenhuma decisão de
-            expansão de conectividade seja tomada só pelo lucro.</strong>
+
+          <p style={{
+            fontSize: '20px',
+            color: '#a8c7fa',
+            maxWidth: '520px',
+            lineHeight: 1.5,
+            marginBottom: '8px',
+            fontWeight: 300,
+          }}>
+            Cinco vozes especializadas.
           </p>
+          <p style={{
+            fontSize: '20px',
+            color: '#ffffff',
+            maxWidth: '520px',
+            lineHeight: 1.5,
+            marginBottom: '36px',
+            fontWeight: 600,
+          }}>
+            Uma decisão mais justa.
+          </p>
+
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
             <Button
               kind="primary"
               renderIcon={ArrowRight}
               onClick={() => navigate('/analise')}
+              size="lg"
             >
               Analisar Região
             </Button>
             <Button
-              kind="tertiary"
+              kind="ghost"
               onClick={() => navigate('/analise?demo=central')}
-              style={{ color: '#fff', borderColor: '#fff' }}
+              style={{ color: '#a8c7fa', borderColor: 'rgba(168,199,250,0.3)' }}
+              size="lg"
             >
               Ver Demo (Central)
             </Button>
+          </div>
+
+          {/* Stats strip */}
+          <div style={{
+            display: 'flex', gap: '32px', marginTop: '48px', flexWrap: 'wrap',
+            borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '32px',
+          }}>
+            {[
+              { value: '5', label: 'perspectivas simultâneas' },
+              { value: '< 30s', label: 'para decisão informada' },
+              { value: '6', label: 'regiões simuladas' },
+              { value: 'JSON', label: 'auditável por análise' },
+            ].map((stat) => (
+              <div key={stat.label}>
+                <p style={{ fontSize: '24px', fontWeight: 700, color: '#4589ff', margin: 0, lineHeight: 1 }}>
+                  {stat.value}
+                </p>
+                <p style={{ fontSize: '12px', color: '#8d8d8d', margin: '4px 0 0' }}>
+                  {stat.label}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
