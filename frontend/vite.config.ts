@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  css: {
+    // Allow large CSS files from Carbon without warnings
+    devSourcemap: false,
+  },
   server: {
     port: 5173,
     proxy: {

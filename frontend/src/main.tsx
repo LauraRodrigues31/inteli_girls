@@ -4,8 +4,8 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './styles/global.css'
 
-// Carbon base styles
-import '@carbon/react/scss/globals/scss/styles.scss'
+// Carbon base styles — pre-compiled, no SASS plugin needed
+import '@carbon/styles/css/styles.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
