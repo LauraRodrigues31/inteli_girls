@@ -1,4 +1,3 @@
-import React from 'react'
 import {
   Select,
   SelectItem,
@@ -7,7 +6,6 @@ import {
   RadioButton,
   Button,
   Tile,
-  InlineNotification,
 } from '@carbon/react'
 import { PlayFilled } from '@carbon/icons-react'
 import type { RegionSummary, SimulatorParams } from '../../types'
@@ -109,18 +107,18 @@ export function ScenarioInputs({
       </Tile>
 
       {/* Quick-fill */}
-      <InlineNotification
-        kind="info"
-        title="Atalho:"
-        subtitle='Preenche automaticamente "Esperança + parcerias" — o caso que mostra score 44 → 50.'
-        lowContrast
-        hideCloseButton
-        actions={
-          <Button kind="ghost" size="sm" onClick={onQuickFill}>
-            ▶️ História Esperança + parcerias
-          </Button>
-        }
-      />
+      <div style={{
+        background: '#edf5ff', border: '1px solid #d0e2ff', borderRadius: '4px',
+        padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '8px',
+      }}>
+        <p style={{ fontSize: '13px', color: '#0043ce', fontWeight: 600, margin: 0 }}>Atalho</p>
+        <p style={{ fontSize: '12px', color: '#525252', margin: 0 }}>
+          Preenche automaticamente "Esperança + parcerias" — o caso que mostra score 44 → 50.
+        </p>
+        <Button kind="ghost" size="sm" onClick={onQuickFill} style={{ alignSelf: 'flex-start', padding: '4px 8px' }}>
+          ▶️ História Esperança + parcerias
+        </Button>
+      </div>
 
       {/* Simulate button */}
       <Button

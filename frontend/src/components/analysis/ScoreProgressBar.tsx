@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Recomendacao } from '../../types'
 
 const COLOR_MAP: Record<Recomendacao, string> = {

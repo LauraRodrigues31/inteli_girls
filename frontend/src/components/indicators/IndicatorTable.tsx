@@ -1,12 +1,6 @@
-import React from 'react'
 import { StructuredListWrapper, StructuredListHead, StructuredListRow, StructuredListCell, StructuredListBody } from '@carbon/react'
 
-interface Row {
-  label: string
-  value: string | number | boolean | null | undefined | string[]
-}
-
-function formatValue(v: Row['value']): string {
+function formatValue(v: unknown): string {
   if (v === null || v === undefined) return '—'
   if (typeof v === 'boolean') return v ? 'Sim' : 'Não'
   if (Array.isArray(v)) return v.length > 0 ? v.join(', ') : '—'
@@ -31,7 +25,7 @@ function humanizeKey(key: string): string {
 }
 
 interface IndicatorTableProps {
-  data: Record<string, Row['value']>
+  data: Record<string, unknown>
 }
 
 export function IndicatorTable({ data }: IndicatorTableProps) {

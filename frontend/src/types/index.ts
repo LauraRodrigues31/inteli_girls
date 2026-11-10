@@ -7,6 +7,7 @@ export interface RegionSummary {
 }
 
 export interface RegionMercado {
+  [key: string]: unknown
   populacao_estimada: number
   domicilios_total: number
   renda_media_mensal_reais: number
@@ -18,6 +19,7 @@ export interface RegionMercado {
 }
 
 export interface RegionSocial {
+  [key: string]: unknown
   percentual_domicilios_sem_internet: number
   quantidade_escolas: number
   escolas_sem_conectividade_adequada: number
@@ -29,6 +31,7 @@ export interface RegionSocial {
 }
 
 export interface RegionEngenharia {
+  [key: string]: unknown
   tipo_infraestrutura_disponivel: string
   distancia_backbone_km: number
   percentual_cobertura_fibra: number
@@ -40,6 +43,7 @@ export interface RegionEngenharia {
 }
 
 export interface RegionFinanceiro {
+  [key: string]: unknown
   capex_reais: number
   opex_mensal_reais: number
   orcamento_disponivel_reais: number
@@ -51,6 +55,7 @@ export interface RegionFinanceiro {
 }
 
 export interface RegionParcerias {
+  [key: string]: unknown
   quantidade_instituicoes_ancora: number
   parceiros_publicos_possiveis: string[]
   parceiros_privados_possiveis: string[]

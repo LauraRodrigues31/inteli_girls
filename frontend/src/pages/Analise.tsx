@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   Button,
   Select,
@@ -10,7 +10,6 @@ import {
   TabPanel,
   TabPanels,
   Tabs,
-  Tile,
   InlineLoading,
   DataTable,
   TableContainer,
@@ -493,7 +492,7 @@ export default function Analise() {
                           <TableHead>
                             <TableRow>
                               {headers.map((h) => (
-                                <TableHeader key={h.key} {...getHeaderProps({ header: h })}>
+                                <TableHeader {...getHeaderProps({ header: h })}>
                                   {h.header}
                                 </TableHeader>
                               ))}

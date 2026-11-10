@@ -1,4 +1,3 @@
-import React from 'react'
 import { InlineNotification } from '@carbon/react'
 
 interface DivergenceListProps {

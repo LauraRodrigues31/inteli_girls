@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Grid, Column, InlineLoading, Tile } from '@carbon/react'
 import { useApp } from '../context/AppContext'
 import { listarRegioes, simularCenario } from '../api/client'

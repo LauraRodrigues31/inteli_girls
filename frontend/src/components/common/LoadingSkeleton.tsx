@@ -1,4 +1,3 @@
-import React from 'react'
 import { SkeletonText, SkeletonPlaceholder, Tile } from '@carbon/react'
 
 export function LoadingSkeleton() {

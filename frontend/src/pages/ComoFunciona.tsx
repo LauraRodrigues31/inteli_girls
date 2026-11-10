@@ -10,7 +10,6 @@ import {
   Settings,
   Finance,
   Partnership,
-  DocumentProtected,
   Checkmark,
   Chemistry,
   Time,

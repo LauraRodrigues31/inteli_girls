@@ -1,4 +1,3 @@
-import React from 'react'
 import { Tile, InlineNotification, StructuredListWrapper, StructuredListRow, StructuredListCell, StructuredListBody } from '@carbon/react'
 import {
   BarChart,

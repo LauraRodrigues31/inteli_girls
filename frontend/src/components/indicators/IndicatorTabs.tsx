@@ -1,4 +1,3 @@
-import React from 'react'
 import { Tab, TabList, TabPanel, TabPanels, Tabs } from '@carbon/react'
 import type { Region } from '../../types'
 import { IndicatorTable } from './IndicatorTable'

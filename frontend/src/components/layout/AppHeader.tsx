@@ -7,7 +7,6 @@ import {
   HeaderGlobalBar,
   HeaderGlobalAction,
   SkipToContent,
-  Tag,
 } from '@carbon/react'
 import { Warning } from '@carbon/icons-react'
 import { useNavigate, useLocation } from 'react-router-dom'

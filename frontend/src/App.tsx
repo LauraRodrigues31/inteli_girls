@@ -1,4 +1,3 @@
-import React from 'react'
 import { Routes, Route } from 'react-router-dom'
 import { Content, ToastNotification, ToastNotificationProps } from '@carbon/react'
 import { AppHeader } from './components/layout/AppHeader'
