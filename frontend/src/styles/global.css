@@ -119,6 +119,12 @@ body {
   background: #8d8d8d;
 }
 
+/* ── Flow diagram animation ─────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ── Utilities ───────────────────────────────────────────────────────────── */
 .sr-only {
   position: absolute;

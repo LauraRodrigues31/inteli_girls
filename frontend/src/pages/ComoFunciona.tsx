@@ -1,10 +1,6 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Button,
-  Grid,
-  Column,
-  Tile,
-  Tag,
   InlineNotification,
 } from '@carbon/react'
 import {
@@ -26,87 +22,117 @@ import { useNavigate } from 'react-router-dom'
 const AGENTS = [
   {
     key: 'mercado',
-    label: 'Agente de Mercado',
+    label: 'Mercado',
+    fullLabel: 'Agente de Mercado',
     Icon: ShoppingCart,
     mandate: 'Defende o retorno financeiro',
     question: 'Vale a pena financeiramente?',
-    color: '#0043ce',
+    detail: 'Analisa renda, crescimento populacional, demanda e competitividade.',
+    color: '#0f62fe',
   },
   {
     key: 'social',
-    label: 'Agente de Impacto Social',
+    label: 'Social',
+    fullLabel: 'Agente de Impacto Social',
     Icon: Group,
     mandate: 'Defende escolas, saúde e inclusão',
     question: 'Quem ganha com a conexão?',
+    detail: 'Conta escolas, postos de saúde e famílias sem acesso.',
     color: '#24a148',
   },
   {
     key: 'engenharia',
-    label: 'Agente de Engenharia',
+    label: 'Engenharia',
+    fullLabel: 'Agente de Engenharia',
     Icon: Settings,
     mandate: 'Avalia a viabilidade técnica',
     question: 'Dá para construir?',
+    detail: 'Distância do backbone, tipo de rede (FTTH, FWA, LEO) e prazo de obra.',
     color: '#8a3ffc',
   },
   {
     key: 'orcamento',
-    label: 'Agente de Orçamento',
+    label: 'Orçamento',
+    fullLabel: 'Agente de Orçamento',
     Icon: Finance,
     mandate: 'Controla custo e prazo',
     question: 'Cabe no limite de custo e prazo?',
+    detail: 'CAPEX, OPEX, payback e margem mensal.',
     color: '#f1c21b',
   },
   {
     key: 'pontes',
-    label: 'Agente de Pontes',
+    label: 'Pontes',
+    fullLabel: 'Agente de Pontes',
     Icon: Partnership,
     mandate: 'Busca clientes âncora',
     question: 'Dá para tornar a região viável?',
-    color: '#ff7eb6',
-  },
-  {
-    key: 'guardiao',
-    label: 'Guardião',
-    Icon: DocumentProtected,
-    mandate: 'Sintetiza e decide',
-    question: 'O que fazemos?',
-    color: '#da1e28',
+    detail: 'Prefeituras, escolas e postos de saúde como clientes âncora.',
+    color: '#ee5396',
   },
 ]
 
 const OUTCOMES = [
-  {
-    recomendacao: 'Investir Agora',
-    icon: Checkmark,
-    color: '#24a148',
-    bg: '#defbe6',
-    rule: 'Score ≥ 70 E orçamento ≥ 60 E engenharia ≥ 60',
-  },
-  {
-    recomendacao: 'Realizar Piloto',
-    icon: Chemistry,
-    color: '#0043ce',
-    bg: '#edf5ff',
-    rule: 'Score ≥ 50, não atende critérios acima',
-  },
-  {
-    recomendacao: 'Aguardar',
-    icon: Time,
-    color: '#a16207',
-    bg: '#fef9c3',
-    rule: '30 ≤ Score < 50',
-  },
-  {
-    recomendacao: 'Escalar a Humano',
-    icon: UserMultiple,
-    color: '#da1e28',
-    bg: '#fff1f1',
-    rule: 'Score < 30 OU engenharia < 20 OU orçamento < 20 OU confiança baixa',
-  },
+  { label: 'Investir Agora', Icon: Checkmark, color: '#24a148', bg: '#defbe6', rule: 'Score ≥ 70 E orçamento ≥ 60 E engenharia ≥ 60' },
+  { label: 'Realizar Piloto', Icon: Chemistry, color: '#0f62fe', bg: '#edf5ff', rule: 'Score ≥ 50, não atende critérios acima' },
+  { label: 'Aguardar', Icon: Time, color: '#a16207', bg: '#fef9c3', rule: '30 ≤ Score < 50' },
+  { label: 'Escalar Humano', Icon: UserMultiple, color: '#da1e28', bg: '#fff1f1', rule: 'Score < 30 OU engenharia < 20 OU orçamento < 20' },
 ]
+
+// ── Interactive flow node ────────────────────────────────────────────────────
+interface FlowNodeProps {
+  label: string
+  color: string
+  isActive: boolean
+  isGuardian?: boolean
+  onEnter: () => void
+  onLeave: () => void
+  children?: React.ReactNode
+}
+
+function FlowNode({ label, color, isActive, isGuardian, onEnter, onLeave, children }: FlowNodeProps) {
+  return (
+    <div
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: isGuardian ? '10px 28px' : '8px 18px',
+        borderRadius: '6px',
+        border: `2px solid ${isActive ? color : isGuardian ? '#161616' : '#d0d0d0'}`,
+        background: isGuardian
+          ? isActive ? '#262626' : '#161616'
+          : isActive ? `${color}18` : '#ffffff',
+        cursor: 'default',
+        userSelect: 'none',
+        transition: 'all 0.18s ease',
+        boxShadow: isActive ? `0 0 0 3px ${color}33` : 'none',
+        minWidth: isGuardian ? '160px' : '110px',
+      }}
+    >
+      <span style={{
+        fontSize: isGuardian ? '14px' : '12px',
+        fontWeight: 700,
+        color: isGuardian ? '#ffffff' : isActive ? color : '#525252',
+        fontFamily: 'IBM Plex Sans, sans-serif',
+        whiteSpace: 'nowrap',
+      }}>
+        {children ?? label}
+      </span>
+    </div>
+  )
+}
 
 export default function ComoFunciona() {
   const navigate = useNavigate()
+  const [activeAgent, setActiveAgent] = useState<string | null>(null)
+  const [activeOutcome, setActiveOutcome] = useState<string | null>(null)
+
+  const activeAgentData = AGENTS.find(a => a.key === activeAgent)
+  const activeOutcomeData = OUTCOMES.find(o => o.label === activeOutcome)
 
   return (
     <div>
@@ -230,148 +256,186 @@ export default function ComoFunciona() {
         />
       </div>
 
-      {/* ── How it works ──────────────────────────────────────────────── */}
-      <div style={{ maxWidth: '900px', margin: '48px auto', padding: '0 24px' }}>
-        <h2
-          style={{
-            fontSize: '24px',
-            fontWeight: 700,
-            marginBottom: '8px',
-            color: '#161616',
-          }}
-        >
-          Como o sistema funciona
-        </h2>
-        <p style={{ color: '#6f6f6f', marginBottom: '28px', fontSize: '15px' }}>
-          Cada agente defende um ponto de vista diferente de propósito, para que nenhuma
-          análise seja unilateral.
-        </p>
+      {/* ── Interactive flow diagram ───────────────────────────────────── */}
+      <div style={{ background: '#f4f4f4', padding: '56px 24px' }}>
+        <div style={{ maxWidth: '860px', margin: '0 auto' }}>
 
-        <Grid narrow>
-          {AGENTS.map((agent) => {
-            const { Icon } = agent
-            return (
-              <Column key={agent.key} sm={4} md={4} lg={8}>
-                <Tile
-                  style={{
-                    padding: '24px',
-                    borderTop: `4px solid ${agent.color}`,
-                    height: '100%',
-                    marginBottom: '16px',
-                  }}
+          {/* Header */}
+          <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+            <h2 style={{ fontSize: '26px', fontWeight: 700, color: '#161616', marginBottom: '8px' }}>
+              Como o sistema funciona
+            </h2>
+            <p style={{ fontSize: '15px', color: '#6f6f6f', maxWidth: '500px', margin: '0 auto' }}>
+              Passe o mouse sobre cada agente para ver seu mandato e a pergunta que ele responde.
+            </p>
+          </div>
+
+          {/* ── Flow layout ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0' }}>
+
+            {/* Row 1: 5 agents */}
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {AGENTS.map((agent) => (
+                <FlowNode
+                  key={agent.key}
+                  label={agent.label}
+                  color={agent.color}
+                  isActive={activeAgent === agent.key}
+                  onEnter={() => { setActiveAgent(agent.key); setActiveOutcome(null) }}
+                  onLeave={() => setActiveAgent(null)}
+                />
+              ))}
+            </div>
+
+            {/* Connector lines SVG */}
+            <svg viewBox="0 0 600 70" style={{ width: '100%', maxWidth: '700px', height: '60px', overflow: 'visible' }}>
+              {AGENTS.map((_, i) => {
+                const x = (i / 4) * 540 + 30
+                return (
+                  <line key={i}
+                    x1={x} y1={5} x2={300} y2={65}
+                    stroke={activeAgent === AGENTS[i].key ? AGENTS[i].color : '#c6c6c6'}
+                    strokeWidth={activeAgent === AGENTS[i].key ? 2 : 1}
+                    strokeDasharray="5 3"
+                    style={{ transition: 'stroke 0.2s' }}
+                  />
+                )
+              })}
+            </svg>
+
+            {/* Row 2: Guardian */}
+            <FlowNode
+              label="🛡 Guardião"
+              color="#0f62fe"
+              isActive={activeAgent === 'guardiao'}
+              isGuardian
+              onEnter={() => { setActiveAgent('guardiao'); setActiveOutcome(null) }}
+              onLeave={() => setActiveAgent(null)}
+            />
+
+            {/* Connector lines SVG */}
+            <svg viewBox="0 0 600 70" style={{ width: '100%', maxWidth: '700px', height: '60px', overflow: 'visible' }}>
+              {OUTCOMES.map((o, i) => {
+                const x = (i / 3) * 540 + 30
+                return (
+                  <line key={i}
+                    x1={300} y1={5} x2={x} y2={65}
+                    stroke={activeOutcome === o.label ? o.color : '#c6c6c6'}
+                    strokeWidth={activeOutcome === o.label ? 2 : 1}
+                    style={{ transition: 'stroke 0.2s' }}
+                  />
+                )
+              })}
+            </svg>
+
+            {/* Row 3: 4 outcomes */}
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {OUTCOMES.map((o) => (
+                <FlowNode
+                  key={o.label}
+                  label={o.label}
+                  color={o.color}
+                  isActive={activeOutcome === o.label}
+                  onEnter={() => { setActiveOutcome(o.label); setActiveAgent(null) }}
+                  onLeave={() => setActiveOutcome(null)}
                 >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      marginBottom: '10px',
-                    }}
-                  >
-                    <Icon size={24} style={{ color: agent.color }} aria-hidden />
-                    <p style={{ fontWeight: 700, fontSize: '15px' }}>{agent.label}</p>
-                  </div>
-                  <p style={{ fontSize: '13px', color: '#525252', marginBottom: '6px' }}>
-                    <em>{agent.mandate}</em>
-                  </p>
-                  <p style={{ fontSize: '14px', color: '#161616', fontWeight: 500 }}>
-                    → {agent.question}
-                  </p>
-                </Tile>
-              </Column>
-            )
-          })}
-        </Grid>
-      </div>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <o.Icon size={13} aria-hidden />
+                    {o.label}
+                  </span>
+                </FlowNode>
+              ))}
+            </div>
+          </div>
 
-      {/* ── Flow diagram (SVG) ─────────────────────────────────────────── */}
-      <div
-        style={{
-          background: '#f4f4f4',
-          padding: '48px 24px',
-        }}
-      >
-        <div style={{ maxWidth: '700px', margin: '0 auto', textAlign: 'center' }}>
-          <h2
-            style={{ fontSize: '22px', fontWeight: 700, marginBottom: '32px', color: '#161616' }}
-          >
-            Fluxo de decisão
-          </h2>
-          <svg
-            viewBox="0 0 600 300"
-            style={{ width: '100%', maxWidth: '600px', fontFamily: 'IBM Plex Sans, sans-serif' }}
-            aria-label="Fluxo multiagente do Conecta Conselho"
-          >
-            {/* 5 Agent boxes */}
-            {['Mercado', 'Social', 'Engenharia', 'Orçamento', 'Pontes'].map((name, i) => (
-              <g key={name}>
-                <rect x={i * 110 + 5} y={20} width={100} height={36} rx={4}
-                  fill="#edf5ff" stroke="#0043ce" strokeWidth={1.5} />
-                <text x={i * 110 + 55} y={43} textAnchor="middle" fontSize={11} fill="#0043ce" fontWeight={600}>
-                  {name}
-                </text>
-                <line x1={i * 110 + 55} y1={56} x2={300} y2={130}
-                  stroke="#c6c6c6" strokeWidth={1} strokeDasharray="4 2" />
-              </g>
-            ))}
-            {/* Guardiao */}
-            <rect x={210} y={130} width={180} height={44} rx={4}
-              fill="#161616" stroke="#0043ce" strokeWidth={2} />
-            <text x={300} y={157} textAnchor="middle" fontSize={13} fill="#ffffff" fontWeight={700}>
-              🛡 Guardião
-            </text>
-            {/* 4 Outcomes */}
-            {[
-              { label: 'Investir Agora', color: '#24a148', x: 20, },
-              { label: 'Realizar Piloto', color: '#0043ce', x: 160 },
-              { label: 'Aguardar', color: '#a16207', x: 320 },
-              { label: 'Escalar Humano', color: '#da1e28', x: 460 },
-            ].map((o) => (
-              <g key={o.label}>
-                <line x1={300} y1={174} x2={o.x + 60} y2={232}
-                  stroke={o.color} strokeWidth={1.5} />
-                <rect x={o.x} y={232} width={120} height={36} rx={4}
-                  fill="white" stroke={o.color} strokeWidth={2} />
-                <text x={o.x + 60} y={255} textAnchor="middle" fontSize={10} fill={o.color} fontWeight={600}>
-                  {o.label}
-                </text>
-              </g>
-            ))}
-          </svg>
+          {/* ── Info panel — appears on hover ── */}
+          <div style={{
+            marginTop: '40px',
+            minHeight: '120px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            {/* Agent tooltip */}
+            {activeAgentData && (
+              <div style={{
+                background: '#ffffff',
+                border: `2px solid ${activeAgentData.color}`,
+                borderRadius: '8px',
+                padding: '24px 28px',
+                maxWidth: '560px',
+                width: '100%',
+                boxShadow: `0 4px 24px ${activeAgentData.color}22`,
+                display: 'flex',
+                gap: '20px',
+                alignItems: 'flex-start',
+                animation: 'fadeIn 0.18s ease',
+              }}>
+                <div style={{
+                  width: '44px', height: '44px', borderRadius: '8px', flexShrink: 0,
+                  background: `${activeAgentData.color}18`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <activeAgentData.Icon size={22} style={{ color: activeAgentData.color }} />
+                </div>
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: '16px', color: '#161616', margin: '0 0 4px' }}>
+                    {activeAgentData.key === 'guardiao' ? 'Guardião' : activeAgentData.fullLabel}
+                  </p>
+                  <p style={{ fontSize: '13px', color: activeAgentData.color, fontWeight: 600, margin: '0 0 8px' }}>
+                    {activeAgentData.mandate}
+                  </p>
+                  <p style={{ fontSize: '14px', color: '#525252', margin: '0 0 6px', lineHeight: 1.6 }}>
+                    {activeAgentData.detail}
+                  </p>
+                  <p style={{ fontSize: '14px', color: '#161616', fontWeight: 600, margin: 0 }}>
+                    → {activeAgentData.question}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Outcome tooltip */}
+            {activeOutcomeData && (
+              <div style={{
+                background: activeOutcomeData.bg,
+                border: `2px solid ${activeOutcomeData.color}`,
+                borderRadius: '8px',
+                padding: '24px 28px',
+                maxWidth: '560px',
+                width: '100%',
+                boxShadow: `0 4px 24px ${activeOutcomeData.color}22`,
+                display: 'flex',
+                gap: '20px',
+                alignItems: 'flex-start',
+                animation: 'fadeIn 0.18s ease',
+              }}>
+                <div style={{
+                  width: '44px', height: '44px', borderRadius: '8px', flexShrink: 0,
+                  background: `${activeOutcomeData.color}22`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <activeOutcomeData.Icon size={22} style={{ color: activeOutcomeData.color }} />
+                </div>
+                <div>
+                  <p style={{ fontWeight: 700, fontSize: '16px', color: activeOutcomeData.color, margin: '0 0 8px' }}>
+                    {activeOutcomeData.label}
+                  </p>
+                  <p style={{ fontSize: '13px', color: '#525252', lineHeight: 1.6, margin: 0 }}>
+                    <strong>Regra:</strong> {activeOutcomeData.rule}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Placeholder when nothing is hovered */}
+            {!activeAgentData && !activeOutcomeData && (
+              <p style={{ fontSize: '13px', color: '#8d8d8d', textAlign: 'center' }}>
+                ↑ Passe o mouse sobre um agente ou resultado para ver os detalhes
+              </p>
+            )}
+          </div>
         </div>
-      </div>
-
-      {/* ── 4 Outcomes ────────────────────────────────────────────────── */}
-      <div style={{ maxWidth: '900px', margin: '48px auto', padding: '0 24px' }}>
-        <h2 style={{ fontSize: '22px', fontWeight: 700, marginBottom: '24px', color: '#161616' }}>
-          Critérios de decisão
-        </h2>
-        <Grid narrow>
-          {OUTCOMES.map((o) => {
-            const { icon: Icon } = o
-            return (
-              <Column key={o.recomendacao} sm={4} md={4} lg={8}>
-                <Tile
-                  style={{
-                    padding: '20px',
-                    background: o.bg,
-                    borderLeft: `4px solid ${o.color}`,
-                    marginBottom: '16px',
-                    height: '100%',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                    <Icon size={20} style={{ color: o.color }} aria-hidden />
-                    <p style={{ fontWeight: 700, fontSize: '15px', color: o.color }}>
-                      {o.recomendacao}
-                    </p>
-                  </div>
-                  <p style={{ fontSize: '13px', color: '#525252', lineHeight: 1.6 }}>{o.rule}</p>
-                </Tile>
-              </Column>
-            )
-          })}
-        </Grid>
       </div>
 
       {/* ── About ─────────────────────────────────────────────────────── */}
