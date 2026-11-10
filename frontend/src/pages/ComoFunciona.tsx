@@ -18,6 +18,15 @@ import {
 } from '@carbon/icons-react'
 import { useNavigate } from 'react-router-dom'
 
+// Initials + color for avatar generation
+const TEAM = [
+  { initials: 'LR', name: 'Laura Rodrigues',   color: '#0f62fe' },
+  { initials: 'AB', name: 'Ana Beggiato',       color: '#8a3ffc' },
+  { initials: 'MC', name: 'Milena Castro',      color: '#ee5396' },
+  { initials: 'GS', name: 'Gabriela Silva',     color: '#24a148' },
+  { initials: 'TV', name: 'Thalyta Viana',      color: '#f1c21b' },
+]
+
 const AGENTS = [
   {
     key: 'mercado',
@@ -68,6 +77,16 @@ const AGENTS = [
     question: 'Dá para tornar a região viável?',
     detail: 'Prefeituras, escolas e postos de saúde como clientes âncora.',
     color: '#ee5396',
+  },
+  {
+    key: 'guardiao',
+    label: '🛡 Guardião',
+    fullLabel: 'Guardião',
+    Icon: UserMultiple,
+    mandate: 'Sintetiza e decide com imparcialidade',
+    question: 'O que fazemos com esta região?',
+    detail: 'Recebe os 5 pareceres, resolve divergências e emite uma recomendação final — investir, pilotar, aguardar ou escalar para humano.',
+    color: '#0f62fe',
   },
 ]
 
@@ -158,88 +177,97 @@ export default function ComoFunciona() {
           pointerEvents: 'none',
         }} />
 
-        <div style={{ maxWidth: '900px', margin: '0 auto', position: 'relative' }}>
-          <p style={{
-            fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em',
-            color: '#4589ff', textTransform: 'uppercase', marginBottom: '20px',
-          }}>
-            IBM SkillsBuild · Trilha 3 · 2024
-          </p>
+        {/* Two-column layout: left = copy, right = team avatars */}
+        <div style={{
+          maxWidth: '960px', margin: '0 auto', position: 'relative',
+          display: 'grid', gridTemplateColumns: '1fr auto', gap: '48px', alignItems: 'center',
+        }}>
+          {/* Left column */}
+          <div>
+            <p style={{
+              fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em',
+              color: '#4589ff', textTransform: 'uppercase', marginBottom: '20px',
+            }}>
+              IBM SkillsBuild · Trilha 3 · 2024
+            </p>
 
-          <h1
-            style={{
-              fontSize: 'clamp(40px, 6vw, 68px)',
-              fontWeight: 700,
-              lineHeight: 1.05,
-              marginBottom: '12px',
-              fontFamily: 'IBM Plex Sans, sans-serif',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            Conecta<br />
-            <span style={{ color: '#4589ff' }}>Conselho</span>
-          </h1>
+            <h1 style={{
+              fontSize: 'clamp(40px, 6vw, 68px)', fontWeight: 700,
+              lineHeight: 1.05, marginBottom: '12px',
+              fontFamily: 'IBM Plex Sans, sans-serif', letterSpacing: '-0.02em',
+            }}>
+              Conecta<br />
+              <span style={{ color: '#4589ff' }}>Conselho</span>
+            </h1>
 
-          <p style={{
-            fontSize: '20px',
-            color: '#a8c7fa',
-            maxWidth: '520px',
-            lineHeight: 1.5,
-            marginBottom: '8px',
-            fontWeight: 300,
-          }}>
-            Cinco vozes especializadas.
-          </p>
-          <p style={{
-            fontSize: '20px',
-            color: '#ffffff',
-            maxWidth: '520px',
-            lineHeight: 1.5,
-            marginBottom: '36px',
-            fontWeight: 600,
-          }}>
-            Uma decisão mais justa.
-          </p>
+            <p style={{ fontSize: '20px', color: '#a8c7fa', lineHeight: 1.5, marginBottom: '8px', fontWeight: 300 }}>
+              Cinco vozes especializadas.
+            </p>
+            <p style={{ fontSize: '20px', color: '#ffffff', lineHeight: 1.5, marginBottom: '36px', fontWeight: 600 }}>
+              Uma decisão mais justa.
+            </p>
 
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-            <Button
-              kind="primary"
-              renderIcon={ArrowRight}
-              onClick={() => navigate('/analise')}
-              size="lg"
-            >
-              Analisar Região
-            </Button>
-            <Button
-              kind="ghost"
-              onClick={() => navigate('/analise?demo=central')}
-              style={{ color: '#a8c7fa', borderColor: 'rgba(168,199,250,0.3)' }}
-              size="lg"
-            >
-              Ver Demo (Central)
-            </Button>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <Button kind="primary" renderIcon={ArrowRight} onClick={() => navigate('/analise')} size="lg">
+                Analisar Região
+              </Button>
+              {/* Tertiary button — visible border even without hover */}
+              <Button
+                kind="tertiary"
+                onClick={() => navigate('/analise?demo=central')}
+                size="lg"
+                style={{ color: '#ffffff', borderColor: '#ffffff' }}
+              >
+                Ver Demo (Central)
+              </Button>
+            </div>
           </div>
 
-          {/* Stats strip */}
-          <div style={{
-            display: 'flex', gap: '32px', marginTop: '48px', flexWrap: 'wrap',
-            borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '32px',
-          }}>
-            {[
-              { value: '5', label: 'perspectivas simultâneas' },
-              { value: '< 30s', label: 'para decisão informada' },
-              { value: '6', label: 'regiões simuladas' },
-              { value: 'JSON', label: 'auditável por análise' },
-            ].map((stat) => (
-              <div key={stat.label}>
-                <p style={{ fontSize: '24px', fontWeight: 700, color: '#4589ff', margin: 0, lineHeight: 1 }}>
-                  {stat.value}
+          {/* Right column — team avatars */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+            <p style={{ fontSize: '11px', color: '#6f9fff', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>
+              Equipe
+            </p>
+            {/* Top row: 3 avatars */}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {TEAM.slice(0, 3).map((m) => (
+                <div key={m.initials} title={m.name} style={{
+                  width: '52px', height: '52px', borderRadius: '50%',
+                  background: `${m.color}33`,
+                  border: `2px solid ${m.color}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <span style={{ fontSize: '15px', fontWeight: 700, color: m.color, fontFamily: 'IBM Plex Sans, sans-serif' }}>
+                    {m.initials}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {/* Bottom row: 2 avatars, centered */}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {TEAM.slice(3).map((m) => (
+                <div key={m.initials} title={m.name} style={{
+                  width: '52px', height: '52px', borderRadius: '50%',
+                  background: `${m.color}33`,
+                  border: `2px solid ${m.color}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <span style={{ fontSize: '15px', fontWeight: 700, color: m.color, fontFamily: 'IBM Plex Sans, sans-serif' }}>
+                    {m.initials}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {/* Names below */}
+            <div style={{ textAlign: 'center' }}>
+              {TEAM.map((m) => (
+                <p key={m.initials} style={{ fontSize: '11px', color: '#8d8d8d', margin: '1px 0', whiteSpace: 'nowrap' }}>
+                  {m.name}
                 </p>
-                <p style={{ fontSize: '12px', color: '#8d8d8d', margin: '4px 0 0' }}>
-                  {stat.label}
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -302,7 +330,7 @@ export default function ComoFunciona() {
               })}
             </svg>
 
-            {/* Row 2: Guardian */}
+            {/* Row 2: Guardian — uses same AGENTS entry for tooltip */}
             <FlowNode
               label="🛡 Guardião"
               color="#0f62fe"
@@ -375,7 +403,10 @@ export default function ComoFunciona() {
                   background: `${activeAgentData.color}18`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <activeAgentData.Icon size={22} style={{ color: activeAgentData.color }} />
+                  {activeAgentData.key === 'guardiao'
+                    ? <span style={{ fontSize: '22px' }}>🛡</span>
+                    : <activeAgentData.Icon size={22} style={{ color: activeAgentData.color }} />
+                  }
                 </div>
                 <div>
                   <p style={{ fontWeight: 700, fontSize: '16px', color: '#161616', margin: '0 0 4px' }}>
