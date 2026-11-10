@@ -148,16 +148,18 @@ export function RegionMap({
     <div style={{ background: '#ffffff', border: '1px solid #e0e0e0', borderRadius: '6px', overflow: 'hidden' }}>
 
       {/* ── SVG ── */}
-      <div style={{ position: 'relative', background: '#e8f0fa' }}>
+      {/* viewBox recortado para o bounding box real dos estados (x:55–710, y:25–775) */}
+      <div style={{ position: 'relative', background: '#dbeafe' }}>
         <svg
-          viewBox="0 0 800 800"
-          style={{ width: '100%', height: '360px', display: 'block' }}
+          viewBox="55 25 655 755"
+          style={{ width: '100%', height: 'auto', display: 'block', maxHeight: '420px' }}
+          preserveAspectRatio="xMidYMid meet"
           aria-label="Mapa do Brasil com regiões simuladas"
           onMouseMove={handleMouseMove}
           onMouseLeave={() => { setHovered(null); setTooltipPos(null) }}
         >
-          {/* Ocean background */}
-          <rect width="800" height="800" fill="#dbeafe" />
+          {/* Ocean background — covers the cropped viewBox area */}
+          <rect x="55" y="25" width="655" height="755" fill="#dbeafe" />
 
           {/* ── State fills (base layer) ── */}
           <g>
@@ -268,16 +270,16 @@ export function RegionMap({
             )
           })}
 
-          {/* Compass */}
-          <g transform="translate(748,740)">
-            <circle cx="0" cy="0" r="18" fill="rgba(255,255,255,0.7)" stroke="#9ab8d8" strokeWidth="1"/>
-            <text x="0" y="-5" textAnchor="middle" fontSize="9" fontWeight="700" fill="#1e3a5f" fontFamily="IBM Plex Sans, sans-serif">N</text>
-            <polygon points="0,-14 -3,-2 0,2 3,-2" fill="#1e3a5f" />
-            <polygon points="0,14 -3,2 0,-2 3,2" fill="#9ab8d8" />
+          {/* Compass — positioned inside cropped viewBox (bottom-right corner) */}
+          <g transform="translate(690,745)">
+            <circle cx="0" cy="0" r="16" fill="rgba(255,255,255,0.75)" stroke="#9ab8d8" strokeWidth="1"/>
+            <text x="0" y="-4" textAnchor="middle" fontSize="8" fontWeight="700" fill="#1e3a5f" fontFamily="IBM Plex Sans, sans-serif">N</text>
+            <polygon points="0,-12 -3,-2 0,2 3,-2" fill="#1e3a5f" />
+            <polygon points="0,12 -3,2 0,-2 3,2" fill="#9ab8d8" />
           </g>
 
-          {/* Attribution */}
-          <text x="400" y="790" textAnchor="middle" fontSize="9" fill="#94a9c0" fontFamily="IBM Plex Sans, sans-serif" fontStyle="italic">
+          {/* Attribution — inside cropped viewBox */}
+          <text x="382" y="772" textAnchor="middle" fontSize="8.5" fill="#94a9c0" fontFamily="IBM Plex Sans, sans-serif" fontStyle="italic">
             Regiões fictícias simuladas · Conecta Conselho · IBM SkillsBuild 2024
           </text>
         </svg>
