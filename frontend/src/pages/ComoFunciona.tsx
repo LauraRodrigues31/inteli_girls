@@ -1,8 +1,5 @@
 import React, { useState } from 'react'
-import {
-  Button,
-  InlineNotification,
-} from '@carbon/react'
+import { InlineNotification } from '@carbon/react'
 import {
   ArrowRight,
   ShoppingCart,
@@ -208,66 +205,85 @@ export default function ComoFunciona() {
             </p>
 
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Button kind="primary" renderIcon={ArrowRight} onClick={() => navigate('/analise')} size="lg">
+              {/* Primary IBM blue button */}
+              <button
+                onClick={() => navigate('/analise')}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '14px 24px', fontSize: '16px', fontWeight: 600,
+                  fontFamily: 'IBM Plex Sans, sans-serif', cursor: 'pointer',
+                  background: '#0f62fe', color: '#ffffff',
+                  border: '2px solid #0f62fe', borderRadius: '0',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#0353e9')}
+                onMouseLeave={e => (e.currentTarget.style.background = '#0f62fe')}
+              >
                 Analisar Região
-              </Button>
-              {/* Tertiary button — visible border even without hover */}
-              <Button
-                kind="tertiary"
+                <ArrowRight size={20} aria-hidden />
+              </button>
+
+              {/* Secondary outlined button — always white border visible */}
+              <button
                 onClick={() => navigate('/analise?demo=central')}
-                size="lg"
-                style={{ color: '#ffffff', borderColor: '#ffffff' }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  padding: '14px 24px', fontSize: '16px', fontWeight: 600,
+                  fontFamily: 'IBM Plex Sans, sans-serif', cursor: 'pointer',
+                  background: 'transparent', color: '#ffffff',
+                  border: '2px solid rgba(255,255,255,0.7)', borderRadius: '0',
+                  transition: 'border-color 0.15s, background 0.15s',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = '#ffffff'
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.7)'
+                  e.currentTarget.style.background = 'transparent'
+                }}
               >
                 Ver Demo (Central)
-              </Button>
+              </button>
             </div>
           </div>
 
-          {/* Right column — team avatars */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-            <p style={{ fontSize: '11px', color: '#6f9fff', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>
-              Equipe
+          {/* Right column — team member cards with person icon */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
+            <p style={{
+              fontSize: '10px', color: '#6f9fff', fontWeight: 600,
+              textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px',
+            }}>
+              Equipe Bob Girls
             </p>
-            {/* Top row: 3 avatars */}
-            <div style={{ display: 'flex', gap: '10px' }}>
-              {TEAM.slice(0, 3).map((m) => (
-                <div key={m.initials} title={m.name} style={{
-                  width: '52px', height: '52px', borderRadius: '50%',
-                  background: `${m.color}33`,
-                  border: `2px solid ${m.color}`,
+            {TEAM.map((m) => (
+              <div key={m.initials} style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+              }}>
+                {/* Person avatar with SVG silhouette */}
+                <div style={{
+                  width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
+                  background: `${m.color}22`, border: `2px solid ${m.color}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0,
+                  overflow: 'hidden',
                 }}>
-                  <span style={{ fontSize: '15px', fontWeight: 700, color: m.color, fontFamily: 'IBM Plex Sans, sans-serif' }}>
-                    {m.initials}
-                  </span>
+                  {/* Person silhouette SVG */}
+                  <svg viewBox="0 0 40 40" width="40" height="40" aria-hidden="true">
+                    {/* Head */}
+                    <circle cx="20" cy="14" r="7" fill={m.color} opacity="0.9" />
+                    {/* Body / shoulders */}
+                    <ellipse cx="20" cy="32" rx="12" ry="9" fill={m.color} opacity="0.9" />
+                  </svg>
                 </div>
-              ))}
-            </div>
-            {/* Bottom row: 2 avatars, centered */}
-            <div style={{ display: 'flex', gap: '10px' }}>
-              {TEAM.slice(3).map((m) => (
-                <div key={m.initials} title={m.name} style={{
-                  width: '52px', height: '52px', borderRadius: '50%',
-                  background: `${m.color}33`,
-                  border: `2px solid ${m.color}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0,
+                {/* Name */}
+                <span style={{
+                  fontSize: '13px', fontWeight: 500, color: '#c6c6c6',
+                  fontFamily: 'IBM Plex Sans, sans-serif', whiteSpace: 'nowrap',
                 }}>
-                  <span style={{ fontSize: '15px', fontWeight: 700, color: m.color, fontFamily: 'IBM Plex Sans, sans-serif' }}>
-                    {m.initials}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {/* Names below */}
-            <div style={{ textAlign: 'center' }}>
-              {TEAM.map((m) => (
-                <p key={m.initials} style={{ fontSize: '11px', color: '#8d8d8d', margin: '1px 0', whiteSpace: 'nowrap' }}>
                   {m.name}
-                </p>
-              ))}
-            </div>
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
