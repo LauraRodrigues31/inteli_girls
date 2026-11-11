@@ -4,6 +4,8 @@ Sistema multiagente que apoia decisões de expansão de conectividade em regiõe
 
 > ⚠️ **Todos os dados são FICTÍCIOS e SIMULADOS.** Nenhum indicador representa município, estado ou região real do Brasil.
 
+**🔗 Protótipo público:** https://conecta-conselho.streamlit.app
+
 ---
 
 ## O problema
@@ -16,22 +18,24 @@ Operadoras precisam priorizar onde expandir conectividade, conciliando viabilida
 
 ```mermaid
 flowchart TD
-    R["Região (regiao_id)"]
-    M["Agente Mercado"]
-    S["Agente Impacto Social"]
-    E["Agente Engenharia"]
-    O["Agente Orçamento"]
-    P["Agente Pontes"]
-    G["Guardião"]
+    U["Usuário (Streamlit)"]
+    M["cc_mercado"]
+    S["cc_impacto_social"]
+    E["cc_engenharia"]
+    O["cc_orcamento"]
+    P["cc_pontes"]
+    C["consolidar_pareceres (Python)"]
     D1["✅ Investir agora"]
-    D2["🔬 Começar com piloto"]
-    D3["⏳ Esperar"]
-    D4["👤 Escalar a um humano"]
+    D2["🔬 Realizar piloto"]
+    D3["⏳ Aguardar"]
+    D4["⚠️ Análise incompleta"]
 
-    R --> M & S & E & O & P
-    M & S & E & O & P --> G
-    G --> D1 & D2 & D3 & D4
+    U -->|"IBM watsonx Orchestrate (paralelo)"| M & S & E & O & P
+    M & S & E & O & P -->|"pareceres JSON"| C
+    C --> D1 & D2 & D3 & D4
 ```
+
+Os 5 agentes são chamados em paralelo via `ThreadPoolExecutor`. A consolidação é feita localmente em Python por `consolidar_pareceres` (`tools/tool_guardiao.py`) — nunca pelo LLM.
 
 ---
 
@@ -44,7 +48,16 @@ flowchart TD
 | Engenharia | `cc_engenharia` | Dá para construir? | `tools/tool_engenharia.py` | `agents/agente_engenharia.yaml` |
 | Orçamento | `cc_orcamento` | Cabe no limite de custo e prazo? | `tools/tool_orcamento.py` | `agents/agente_orcamento.yaml` |
 | Pontes | `cc_pontes` | Dá para tornar a região viável? | `tools/tool_pontes.py` | `agents/agente_pontes.yaml` |
-| Guardião | `cc_guardiao` | O que fazemos? | `tools/tool_guardiao.py` | `agents/agente_guardiao.yaml` |
+
+---
+
+## Páginas do app
+
+| Página | Descrição |
+|---|---|
+| **📖 Como funciona** | Página inicial interativa — apresenta os agentes, sliders para brincar com o Guardião ao vivo e legenda das recomendações |
+| **🔍 Análise de Região** | Executa os 5 agentes (IBM ou local), exibe pareceres, recomendação, alerta de atenção prioritária, motivos e caminhos, ranking da sessão e download do relatório JSON. Inclui o **mapa interativo** colorido pela recomendação do Guardião (verde = piloto, azul = investir, amarelo = aguardar, borda vermelha = atenção prioritária) — a pessoa escolhe a região clicando no mapa. Também possui abas de comparação lado a lado e histórico/ranking |
+| **🧪 Simulador de cenários** | "E se…?" — simula impacto de parcerias, teto de investimento e distância do backbone; prova que Esperança vai de 44 (Aguardar) → 50 (Piloto) com parcerias. O **mapa interativo** também está disponível aqui para selecionar a região de simulação |
 
 ---
 
@@ -52,14 +65,20 @@ flowchart TD
 
 ```
 inteli_girls/
-├── agents/          # YAMLs dos agentes ADK
-├── tools/           # Ferramentas Python dos agentes (tool_<nome>.py)
+├── agents/                    # YAMLs dos agentes ADK
+├── tools/                     # Ferramentas Python dos agentes (tool_<nome>.py)
+├── scripts/                   # Scripts de publicação e teste na nuvem
 ├── conecta-conselho/
-│   ├── data/        # regioes.json e regioes.csv (dados simulados)
-│   ├── models/      # Modelos Pydantic (regiao.py)
-│   ├── tools/       # consultar_regiao.py (consultas compartilhadas)
-│   ├── tests/       # Testes automatizados
-│   └── docs/        # Documentação do projeto
+│   ├── app.py                 # Roteador Streamlit (st.navigation)
+│   ├── integracao.py          # Camada multi-fonte (local / nuvem)
+│   ├── cliente_nuvem.py       # Conexão IBM watsonx Orchestrate
+│   ├── simulador.py           # Motor de cenários determinístico
+│   ├── paginas/               # Uma página por arquivo (como_funciona, analise, simulador) + mapa_seletor (componente do mapa)
+│   ├── data/                  # regioes.json e regioes.csv (dados simulados)
+│   ├── models/                # Modelos Pydantic (regiao.py)
+│   ├── tools/                 # consultar_regiao.py (consultas compartilhadas)
+│   ├── tests/                 # Testes automatizados (mais de mil testes)
+│   └── docs/                  # Documentação do projeto
 ├── requirements.txt
 └── pytest.ini
 ```
@@ -82,41 +101,67 @@ inteli_girls/
 git clone --branch main https://github.com/LauraRodrigues31/inteli_girls.git
 cd inteli_girls
 
-python -m venv .venv
-.venv\Scripts\Activate.ps1
+python -m venv venv
+venv\Scripts\Activate.ps1
 
 pip install -r requirements.txt
 python -m pytest -q
 ```
 
-A suíte completa tem **mais de 750 testes** (incluindo os 204 da base de dados) e todos devem passar.
-
-### Rodar uma tool isolada
-
-O exemplo abaixo invoca `montar_parecer` do Agente Engenharia para a Região Aurora:
-
-```powershell
-.venv\Scripts\python.exe -c "
-import sys, importlib.util
-sys.path.insert(0, 'conecta-conselho')
-spec = importlib.util.spec_from_file_location('tool_engenharia', 'tools/tool_engenharia.py')
-mod = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(mod)
-import json; print(json.dumps(mod.montar_parecer('aurora'), ensure_ascii=False, indent=2))
-"
-```
-
-> O `sys.path.insert(0, 'conecta-conselho')` é necessário porque o workspace tem dois pacotes `tools/` — um na raiz (ferramentas ADK) e outro em `conecta-conselho/tools/` (consultas compartilhadas). O Python do `.venv` já tem o ADK instalado.
+A suíte completa tem **mais de 1 000 testes automatizados** e todos devem passar.
 
 ### Interface Streamlit
 
 ```powershell
+# Com o venv ativo:
 python -m streamlit run conecta-conselho/app.py
 ```
 
-(com o ambiente virtual ativo; abrir fora do venv causa erro de módulo do ADK)
+> Rodar fora do venv causa erro de módulo do ADK.
 
-Modo padrão: local (cálculos determinísticos, sem nuvem).
+Fonte dos pareceres (barra lateral):
+
+- **IBM watsonx Orchestrate**: vira o padrão quando `WXO_URL`, `WXO_API_KEY` e os 5 `CC_AGENT_ID_*` estão definidos. Resultados da nuvem ficam em cache por 6 h por região; o botão **🔄 Consultar a IBM novamente** ignora o cache. Análises incompletas nunca ficam em cache.
+- **Local**: cálculos determinísticos sem nuvem. É o padrão quando faltam credenciais ou IDs, e o plano B se a nuvem falhar (botão **🖥️ Analisar no modo Local**).
+
+As variáveis são lidas primeiro do ambiente do processo (`os.environ`) e depois do `.env` na raiz.
+
+#### Cartografia fictícia
+
+O mapa da Análise de Região e do Simulador lê `conecta-conselho/data/territorio_ficticio.geojson`.
+As feições são organizadas por `properties.camada`, incluindo regiões, litoral, rios,
+vias, áreas protegidas, relevo, núcleos urbanos e fibra. Para regenerar o arquivo
+a partir da malha de referência, na raiz do projeto execute:
+
+```powershell
+python scripts/gerar_geografia_ficticia.py
+```
+
+O gerador usa apenas a biblioteca padrão do Python. A semente é fixa, e cada
+trecho compartilhado é detalhado uma vez e reutilizado pelas regiões vizinhas.
+O arquivo GeoJSON usa uma origem angular fictícia em `(0, 0)`, codificando a
+malha local como `[x / 1000, -y / 1000]`. O componente converte esses valores
+de volta para o plano de desenho. Por isso, a carta tem orientação norte e
+zoom, mas não usa escala em quilômetros. As distâncias e os indicadores
+exibidos são os da base simulada. Todas as camadas são locais.
+
+### Deploy no Streamlit Cloud
+
+1. Em *Create app*, aponte para este repositório, branch `main` e arquivo `conecta-conselho/app.py`.
+2. Em *Advanced settings*, escolha **Python 3.12**.
+3. Em *Secrets*, cole as variáveis no nível raiz do TOML (o Streamlit as expõe como variáveis de ambiente):
+
+```toml
+WXO_URL = "https://..."
+WXO_API_KEY = "..."
+CC_AGENT_ID_MERCADO = "..."
+CC_AGENT_ID_SOCIAL = "..."
+CC_AGENT_ID_ENGENHARIA = "..."
+CC_AGENT_ID_ORCAMENTO = "..."
+CC_AGENT_ID_PONTES = "..."
+```
+
+Sem os Secrets, o app sobe normalmente no modo Local.
 
 ---
 
@@ -132,20 +177,44 @@ Os scores vêm de **funções Python determinísticas**, nunca do LLM. O Guardi�
 | Impacto Social | 20% |
 | Pontes | 10% |
 
-Critérios de recomendação (Seção 11 do [PADRAO_DESENVOLVIMENTO_AGENTES.md](conecta-conselho/docs/PADRAO_DESENVOLVIMENTO_AGENTES.md)):
+Critérios de recomendação:
 
 | Recomendação | Critério |
 |---|---|
 | **Investir agora** | `score_consolidado ≥ 70` **E** `orcamento ≥ 60` **E** `engenharia ≥ 60` |
-| **Começar com piloto** | `score_consolidado ≥ 50` e NÃO atende critérios acima |
-| **Esperar** | `30 ≤ score_consolidado < 50` |
-| **Escalar a um humano** | `score_consolidado < 30`, OU `engenharia < 20`, OU `orcamento < 20`, OU algum parecer com erro ou confiança baixa |
+| **Realizar piloto** | `score_consolidado ≥ 50` e não atende critérios acima |
+| **Aguardar** | `30 ≤ score_consolidado < 50` |
+| **⚠️ Análise incompleta** | Algum agente retornou erro, confiança baixa, `score < 20` em orçamento ou engenharia, ou `score_consolidado < 30` |
 
-Esse escalonamento garante que casos bloqueados ou com dados incertos sejam decididos por uma pessoa.
+O **Alerta de Atenção Prioritária** é acionado quando os pontos críticos indicam risco elevado mesmo dentro de uma recomendação válida (ex.: Nova União — aguardar com alerta).
 
 > ⚠️ Os pesos e limiares acima são **hipóteses do MVP** para fins de demonstração. Não representam metodologia real de decisão de investimento.
 
 Resultados por região: [RESULTADOS_REGIOES.md](conecta-conselho/docs/RESULTADOS_REGIOES.md)
+
+---
+
+## Capturas de tela
+
+**Como funciona** — página inicial interativa com os agentes:
+![Como funciona](conecta-conselho/docs/prints/print_como_funciona.png)
+
+**Análise de Região** — mapa interativo colorido pela recomendação do Guardião (borda vermelha = atenção prioritária):
+![Análise — mapa colorido](conecta-conselho/docs/prints/print_analise_mapa.png)
+
+**Nova União selecionada** — modo IBM watsonx Orchestrate:
+![Análise — Nova União IBM](conecta-conselho/docs/prints/print_analise_nova_uniao_ibm.png)
+
+**Central selecionada**:
+![Análise — Central](conecta-conselho/docs/prints/print_analise_central.png)
+
+**Comparar regiões** — Central × Nova União lado a lado:
+![Comparar regiões](conecta-conselho/docs/prints/print_comparar_central_nova_uniao.png)
+
+**Simulador de cenários** — atalho Esperança com parcerias + mapa:
+![Simulador — Esperança](conecta-conselho/docs/prints/print_simulador_esperanca_mapa.png)
+
+> ℹ️ Prints capturados em https://conecta-conselho.streamlit.app · zoom 125% · dados simulados
 
 ---
 
@@ -159,7 +228,6 @@ A publicação no watsonx Orchestrate é feita por uma única pessoa do grupo. V
 
 - Todos os dados são simulados e fictícios; nenhum indicador representa localidade real.
 - O sistema **apoia a triagem** de oportunidades — não autoriza investimentos, obras ou contratos.
-- Não há mapas, geolocalização nem geoprocessamento.
 - Não substitui análise de campo, regulação ou negociação comercial.
 
 ---
