@@ -15,14 +15,106 @@ import {
 } from '@carbon/icons-react'
 import { useNavigate } from 'react-router-dom'
 
-// Initials + color for avatar generation
-const TEAM = [
-  { initials: 'LR', name: 'Laura Rodrigues',   color: '#0f62fe' },
-  { initials: 'AB', name: 'Ana Beggiato',       color: '#8a3ffc' },
-  { initials: 'MC', name: 'Milena Castro',      color: '#ee5396' },
-  { initials: 'GS', name: 'Gabriela Silva',     color: '#24a148' },
-  { initials: 'TV', name: 'Thalyta Viana',      color: '#f1c21b' },
+// Team characters (flat illustration, same style as the pitch deck)
+type Hair = 'curlyLong' | 'curly' | 'wavyLong' | 'straight' | 'curlyShort'
+interface TeamMember {
+  initials: string
+  name: string
+  hair: Hair
+  hairColor: string
+  skin: string
+  top: string
+  stripes?: boolean
+  glasses?: boolean
+  hoops?: boolean
+}
+
+const TEAM: TeamMember[] = [
+  { initials: 'MC', name: 'Milena Castro',  hair: 'curlyLong',  hairColor: '#2a1a14', skin: '#f0c7a3', top: '#e8dac3' },
+  { initials: 'LR', name: 'Laura Rodrigues', hair: 'curlyLong',  hairColor: '#2a1a14', skin: '#f0c7a3', top: '#1f2226' },
+  { initials: 'GS', name: 'Gabriela Silva', hair: 'wavyLong',   hairColor: '#1d1512', skin: '#f0c7a3', top: '#9d8aab', stripes: true },
+  { initials: 'TV', name: 'Thalyta Viana',  hair: 'straight',   hairColor: '#7a5238', skin: '#f0c7a3', top: '#3a2a24' },
+  { initials: 'AB', name: 'Ana Beggiato',   hair: 'curlyShort', hairColor: '#2a1a14', skin: '#f0c7a3', top: '#1f2226', glasses: true, hoops: true },
 ]
+
+function TeamCharacter({ member: m }: { member: TeamMember }) {
+  const { hair, hairColor: hc, skin, top } = m
+  return (
+    <svg
+      viewBox="0 0 100 130"
+      width="104"
+      height="135"
+      role="img"
+      aria-label={m.name}
+    >
+      <title>{m.name}</title>
+      {/* Hair behind head */}
+      {hair === 'curlyLong' && (
+        <g fill={hc}>
+          <circle cx="50" cy="30" r="24" />
+          <circle cx="26" cy="44" r="10" /><circle cx="22" cy="62" r="9" /><circle cx="26" cy="80" r="8" />
+          <circle cx="74" cy="44" r="10" /><circle cx="78" cy="62" r="9" /><circle cx="74" cy="80" r="8" />
+        </g>
+      )}
+      {hair === 'wavyLong' && (
+        <g fill={hc}>
+          <path d="M24 40 Q22 16 50 14 Q78 16 76 40 L80 84 Q74 92 68 82 L66 50 L34 50 L32 82 Q26 92 20 84 Z" />
+        </g>
+      )}
+      {hair === 'straight' && (
+        <path d="M26 38 Q26 12 50 12 Q74 12 74 38 L76 82 L24 82 Z" fill={hc} />
+      )}
+      {hair === 'curlyShort' && (
+        <g fill={hc}>
+          <circle cx="36" cy="22" r="11" /><circle cx="50" cy="16" r="12" /><circle cx="64" cy="22" r="11" />
+          <circle cx="30" cy="34" r="8" /><circle cx="70" cy="34" r="8" />
+        </g>
+      )}
+
+      {/* Shoulders / top */}
+      <path d="M14 130 L14 112 Q14 88 50 86 Q86 88 86 112 L86 130 Z" fill={top} />
+      {m.stripes && (
+        <g stroke="#fff" strokeOpacity="0.55" strokeWidth="2">
+          <line x1="34" y1="92" x2="34" y2="130" /><line x1="66" y1="92" x2="66" y2="130" />
+          <line x1="50" y1="96" x2="50" y2="130" />
+        </g>
+      )}
+      {/* Neck */}
+      <rect x="44" y="68" width="12" height="20" fill={skin} />
+      {/* V collar */}
+      <path d="M42 88 L50 100 L58 88 Z" fill={skin} />
+
+      {/* Ears / hoops */}
+      <circle cx="28" cy="52" r="4" fill={skin} />
+      <circle cx="72" cy="52" r="4" fill={skin} />
+      {m.hoops && (
+        <g fill="none" stroke="#d9dde3" strokeWidth="2">
+          <circle cx="26" cy="62" r="6" /><circle cx="74" cy="62" r="6" />
+        </g>
+      )}
+
+      {/* Face */}
+      <ellipse cx="50" cy="48" rx="22" ry="24" fill={skin} />
+
+      {/* Fringe */}
+      {hair === 'straight' && <path d="M28 44 Q30 22 50 22 Q70 22 72 44 Q60 32 50 34 Q40 32 28 44 Z" fill={hc} />}
+      {hair === 'wavyLong' && <path d="M28 46 Q28 22 50 22 Q72 22 72 46 Q60 30 50 34 Q36 30 28 46 Z" fill={hc} />}
+      {(hair === 'curlyLong') && <path d="M28 40 Q32 22 50 24 Q68 22 72 40 Q60 30 50 32 Q40 30 28 40 Z" fill={hc} />}
+
+      {/* Eyes */}
+      <circle cx="41" cy="48" r="2" fill="#2b1d17" />
+      <circle cx="59" cy="48" r="2" fill="#2b1d17" />
+      {/* Glasses */}
+      {m.glasses && (
+        <g fill="none" stroke="#b07a4a" strokeWidth="1.8">
+          <circle cx="41" cy="48" r="7" /><circle cx="59" cy="48" r="7" /><line x1="48" y1="48" x2="52" y2="48" />
+        </g>
+      )}
+      {/* Smile */}
+      <path d="M42 60 Q50 67 58 60" fill="none" stroke="#2b1d17" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
 
 const AGENTS = [
   {
@@ -248,41 +340,17 @@ export default function ComoFunciona() {
             </div>
           </div>
 
-          {/* Right column — team member cards with person icon */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
-            <p style={{
-              fontSize: '10px', color: '#6f9fff', fontWeight: 600,
-              textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px',
-            }}>
-              Equipe Bob Girls
-            </p>
+          {/* Right column — team illustrated characters (no circles, no names) */}
+          <div
+            role="group"
+            aria-label="Equipe Bob Girls"
+            style={{
+              display: 'flex', flexWrap: 'wrap', gap: '4px 8px',
+              alignItems: 'flex-end', justifyContent: 'center', maxWidth: '360px',
+            }}
+          >
             {TEAM.map((m) => (
-              <div key={m.initials} style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-              }}>
-                {/* Person avatar with SVG silhouette */}
-                <div style={{
-                  width: '40px', height: '40px', borderRadius: '50%', flexShrink: 0,
-                  background: `${m.color}22`, border: `2px solid ${m.color}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  overflow: 'hidden',
-                }}>
-                  {/* Person silhouette SVG */}
-                  <svg viewBox="0 0 40 40" width="40" height="40" aria-hidden="true">
-                    {/* Head */}
-                    <circle cx="20" cy="14" r="7" fill={m.color} opacity="0.9" />
-                    {/* Body / shoulders */}
-                    <ellipse cx="20" cy="32" rx="12" ry="9" fill={m.color} opacity="0.9" />
-                  </svg>
-                </div>
-                {/* Name */}
-                <span style={{
-                  fontSize: '13px', fontWeight: 500, color: '#c6c6c6',
-                  fontFamily: 'IBM Plex Sans, sans-serif', whiteSpace: 'nowrap',
-                }}>
-                  {m.name}
-                </span>
-              </div>
+              <TeamCharacter key={m.initials} member={m} />
             ))}
           </div>
         </div>

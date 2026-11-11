@@ -68,8 +68,16 @@ body {
 }
 
 /* Header nav items */
+.cds--header__nav,
+.cds--header__nav .cds--header__menu-item {
+  background: #0a0a0a !important;
+}
 .cds--header__nav .cds--header__menu-item {
   color: #a8c7fa !important;
+}
+.cds--header__nav .cds--header__menu-item:focus {
+  outline: 2px solid #0f62fe !important;
+  background: #0a0a0a !important;
 }
 .cds--header__nav .cds--header__menu-item:hover,
 .cds--header__nav .cds--header__menu-item[aria-current='page'] {
