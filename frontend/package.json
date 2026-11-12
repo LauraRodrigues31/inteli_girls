@@ -1,0 +1,33 @@
+{
+  "name": "conecta-conselho-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
+  },
+  "dependencies": {
+    "@carbon/icons-react": "^11.54.0",
+    "@carbon/react": "^1.71.0",
+    "axios": "^1.7.7",
+    "leaflet": "^1.9.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-leaflet": "^4.2.1",
+    "react-router-dom": "^6.26.1",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.12",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "eslint": "^9.9.0",
+    "sass": "^1.108.1",
+    "typescript": "^5.5.3",
+    "vite": "^5.4.1"
+  }
+}

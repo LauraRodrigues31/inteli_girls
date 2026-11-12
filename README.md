@@ -53,6 +53,8 @@ Os 5 agentes são chamados em paralelo via `ThreadPoolExecutor`. A consolidaçã
 
 ## Páginas do app
 
+As mesmas três telas existem no front React (oficial) e na interface Streamlit (legado).
+
 | Página | Descrição |
 |---|---|
 | **📖 Como funciona** | Página inicial interativa — apresenta os agentes, sliders para brincar com o Guardião ao vivo e legenda das recomendações |
@@ -68,8 +70,10 @@ inteli_girls/
 ├── agents/                    # YAMLs dos agentes ADK
 ├── tools/                     # Ferramentas Python dos agentes (tool_<nome>.py)
 ├── scripts/                   # Scripts de publicação e teste na nuvem
+├── api/                       # Backend FastAPI usado pelo front-end
+├── frontend/                  # Interface web atual (React + Vite + IBM Carbon)
 ├── conecta-conselho/
-│   ├── app.py                 # Roteador Streamlit (st.navigation)
+│   ├── app.py                 # Interface Streamlit (legado; roteador st.navigation)
 │   ├── integracao.py          # Camada multi-fonte (local / nuvem)
 │   ├── cliente_nuvem.py       # Conexão IBM watsonx Orchestrate
 │   ├── simulador.py           # Motor de cenários determinístico
@@ -110,7 +114,39 @@ python -m pytest -q
 
 A suíte completa tem **mais de 1 000 testes automatizados** e todos devem passar.
 
-### Interface Streamlit
+### Interface web (React + FastAPI)
+
+A interface atual é um front-end **React** (pasta `frontend/`) que conversa com um backend **FastAPI** (pasta `api/`). São dois processos, então abra **dois terminais**.
+
+> **Pré-requisitos:** Python 3.12 (já instalado nos passos acima) e **Node.js 18 ou superior** (`node --version`).
+
+**Terminal 1 — backend** (na raiz do projeto, com o venv ativo):
+
+```powershell
+venv\Scripts\Activate.ps1
+uvicorn api.main:app --reload --port 8000
+```
+
+A API fica em http://localhost:8000 (documentação interativa em http://localhost:8000/docs).
+
+**Terminal 2 — front-end:**
+
+```powershell
+cd frontend
+npm install                # só na primeira vez
+copy .env.example .env     # só na primeira vez
+npm run dev
+```
+
+Abra **http://localhost:5173**. O front só carrega as regiões se o backend (terminal 1) estiver rodando.
+
+Mais detalhes (estrutura, páginas, endpoints, build): [frontend/README.md](frontend/README.md).
+
+**Modo local × nuvem:** o padrão é o modo **local** (cálculos determinísticos, sem nuvem e **sem credenciais**). Na tela *Análise de Região*, a opção "IBM watsonx Orchestrate" usa os agentes publicados na nuvem e exige `WXO_URL`, `WXO_API_KEY` e os `CC_AGENT_ID_*` no arquivo `.env` da raiz (arquivo não versionado; peça os valores a quem publica os agentes).
+
+### Interface Streamlit (legado)
+
+> **Streamlit (legado):** a interface anterior continua no repositório em `conecta-conselho/app.py`, mas **não é mais a interface oficial**.
 
 ```powershell
 # Com o venv ativo:
@@ -144,6 +180,10 @@ malha local como `[x / 1000, -y / 1000]`. O componente converte esses valores
 de volta para o plano de desenho. Por isso, a carta tem orientação norte e
 zoom, mas não usa escala em quilômetros. As distâncias e os indicadores
 exibidos são os da base simulada. Todas as camadas são locais.
+
+### Deploy do site React no Render
+
+O arquivo [`render.yaml`](render.yaml) define um único serviço: a API FastAPI também serve o front compilado (`frontend/dist`). No Render, use *New › Blueprint*, escolha este repositório e a branch desejada. O site sobe em modo local; para o modo nuvem, cadastre `WXO_URL`, `WXO_API_KEY` e os 5 `CC_AGENT_ID_*` em *Environment* (dependências de produção em [`requirements-deploy.txt`](requirements-deploy.txt)).
 
 ### Deploy no Streamlit Cloud
 
@@ -195,6 +235,25 @@ Resultados por região: [RESULTADOS_REGIOES.md](conecta-conselho/docs/RESULTADOS
 ---
 
 ## Capturas de tela
+
+**Como funciona** — página inicial com a equipe e o fluxo interativo dos agentes:
+![Como funciona](conecta-conselho/docs/prints/front_como_funciona.png)
+
+**Análise de Região › Indicadores** — mapa das regiões e indicadores por perspectiva:
+![Análise — indicadores](conecta-conselho/docs/prints/front_analise_indicadores.png)
+
+**Análise de Região › Conselho (Central)** — recomendação *Realizar piloto*, com os pareceres dos 5 agentes:
+![Análise — Central](conecta-conselho/docs/prints/front_analise_conselho_central.png)
+
+**Análise de Região › Conselho (Nova União)** — recomendação *Aguardar* com alerta de **Atenção Prioritária**:
+![Análise — Nova União](conecta-conselho/docs/prints/front_analise_conselho_nova_uniao.png)
+
+**Simulador de cenários** — atalho "Esperança + parcerias", comparando cenário base e com parcerias:
+![Simulador — Esperança](conecta-conselho/docs/prints/front_simulador_esperanca.png)
+
+> ℹ️ Prints do front-end React em modo local (dados simulados), resolução 1440 px.
+
+### Prints da interface Streamlit (legado)
 
 **Como funciona** — página inicial interativa com os agentes:
 ![Como funciona](conecta-conselho/docs/prints/print_como_funciona.png)
