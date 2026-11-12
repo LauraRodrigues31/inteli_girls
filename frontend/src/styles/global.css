@@ -1,0 +1,147 @@
+/* ── IBM Plex Sans ───────────────────────────────────────────────────────── */
+/* Loaded via index.html <link> for better performance */
+
+/* ── Root variables (aligned with Conecta Conselho deck palette) ─────────── */
+:root {
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+  /* IBM Blue scale */
+  --ibm-blue-70:  #001141;
+  --ibm-blue-60:  #0f62fe;
+  --ibm-blue-50:  #4589ff;
+  --ibm-blue-40:  #a8c7fa;
+
+  /* IBM Gray scale */
+  --ibm-gray-100: #0a0a0a;
+  --ibm-gray-90:  #161616;
+  --ibm-gray-80:  #262626;
+  --ibm-gray-10:  #f4f4f4;
+
+  /* Score / recommendation colors */
+  --score-invest: #24a148;
+  --score-pilot:  #0f62fe;
+  --score-wait:   #a16207;
+  --score-human:  #da1e28;
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  background-color: #ffffff;
+  color: #161616;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Carbon overrides ────────────────────────────────────────────────────── */
+
+/* Carbon header always on top */
+.cds--header {
+  z-index: 8000 !important;
+  background: #0a0a0a !important;
+  border-bottom: 1px solid #1a2a4a !important;
+}
+
+/* Header name text */
+.cds--header__name {
+  color: #ffffff !important;
+}
+.cds--header__name:hover {
+  background: rgba(255,255,255,0.05) !important;
+}
+
+/* Header nav items */
+.cds--header__nav,
+.cds--header__nav .cds--header__menu-item {
+  background: #0a0a0a !important;
+}
+.cds--header__nav .cds--header__menu-item {
+  color: #a8c7fa !important;
+}
+.cds--header__nav .cds--header__menu-item:focus {
+  outline: 2px solid #0f62fe !important;
+  background: #0a0a0a !important;
+}
+.cds--header__nav .cds--header__menu-item:hover,
+.cds--header__nav .cds--header__menu-item[aria-current='page'] {
+  color: #ffffff !important;
+  background: rgba(15,98,254,0.15) !important;
+  border-bottom-color: #0f62fe !important;
+}
+
+/* Remove default Carbon content padding */
+.cds--content {
+  background: #ffffff;
+  padding: 0 !important;
+}
+
+/* Sticky simulated-data banner */
+.simulated-banner {
+  position: sticky;
+  top: 48px;
+  z-index: 999;
+}
+
+/* Tile hover */
+.cds--tile:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Animated score bar */
+.score-bar-fill {
+  transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── SVG map tooltip (hover card is now in React, no Leaflet) ────────────── */
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f4f4f4;
+}
+::-webkit-scrollbar-thumb {
+  background: #c6c6c6;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8d8d8d;
+}
+
+/* ── Flow diagram animation ─────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Utilities ───────────────────────────────────────────────────────────── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

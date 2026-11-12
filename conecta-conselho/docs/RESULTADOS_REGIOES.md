@@ -4,7 +4,7 @@
 > Os scores abaixo foram gerados a partir de `conecta-conselho/data/regioes.json` (base simulada) usando
 > as fórmulas determinísticas documentadas em `PADRAO_DESENVOLVIMENTO_AGENTES.md` (Seções 6–10 e 11).
 > Não representam indicadores reais de nenhuma região brasileira.
-> **Finalidade:** gabarito para o Agente Guardião, para o Streamlit e para conferência pós-publicação na nuvem.
+> **Finalidade:** gabarito para o Agente Guardião, para a interface web e para conferência pós-publicação na nuvem.
 
 ---
 

@@ -15,7 +15,7 @@ Este diretório contém a base de dados simulada do **Conecta Conselho**, um sis
 | Arquivo | Descrição |
 |---|---|
 | `regioes.json` | **Fonte única da verdade.** Dados completos de todas as 6 regiões, organizados hierarquicamente por perspectiva. |
-| `regioes.csv` | Versão tabular gerada automaticamente a partir do JSON. Use para exploração no Streamlit e análises tabulares. |
+| `regioes.csv` | Versão tabular gerada automaticamente a partir do JSON. Use para exploração em planilhas e análises tabulares. |
 | `gerar_csv.py` | Script para regenerar o CSV a partir do JSON. Execute sempre que o JSON for alterado. |
 | `README.md` | Este documento. |
 

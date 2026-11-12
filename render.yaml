@@ -1,0 +1,30 @@
+# Deploy no Render (Blueprint). Um único serviço: a API FastAPI também serve o front compilado.
+services:
+  - type: web
+    name: conecta-conselho
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-deploy.txt && cd frontend && npm ci && npm run build
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: NODE_VERSION
+        value: 20.18.0
+      # Modo nuvem (opcional): cadastre estes valores como secrets no painel do Render.
+      # Sem eles o site funciona normalmente em modo local.
+      - key: WXO_URL
+        sync: false
+      - key: WXO_API_KEY
+        sync: false
+      - key: CC_AGENT_ID_MERCADO
+        sync: false
+      - key: CC_AGENT_ID_SOCIAL
+        sync: false
+      - key: CC_AGENT_ID_ENGENHARIA
+        sync: false
+      - key: CC_AGENT_ID_ORCAMENTO
+        sync: false
+      - key: CC_AGENT_ID_PONTES
+        sync: false

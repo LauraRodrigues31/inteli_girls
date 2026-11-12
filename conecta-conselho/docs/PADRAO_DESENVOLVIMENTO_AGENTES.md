@@ -49,18 +49,18 @@ O MVP não implementa mapas, geolocalização, análise espacial, comparação g
 
 ### 1.3 Fluxo de Execução
 
-1. O usuário seleciona uma região na interface Streamlit.
-2. O Streamlit envia `regiao_id` ao agente Guardião.
+1. O usuário seleciona uma região na interface web (React).
+2. A interface (via API FastAPI) envia `regiao_id` ao agente Guardião.
 3. O Guardião invoca os cinco agentes especialistas em paralelo ou sequência.
 4. Cada agente consulta a base via `tools/consultar_regiao.py` e retorna seu parecer no formato do contrato padrão (Seção 3).
 5. O Guardião consolida os cinco pareceres, identifica divergências e produz uma recomendação.
-6. O Streamlit exibe os resultados organizados por perspectiva e a recomendação final.
+6. A interface exibe os resultados organizados por perspectiva e a recomendação final.
 
 ### 1.4 Diagrama de Arquitetura
 
 ```mermaid
 flowchart TD
-    UI["🖥️ Interface Streamlit\n(app.py)"]
+    UI["🖥️ Interface web React\n(frontend/ + api/)"]
     BD["📦 Base Compartilhada\n(data/regioes.json)"]
     G["🛡️ Agente Guardião\n(agente_guardiao.yaml)"]
     M["📊 Agente Mercado\n(agente_mercado.yaml)"]
@@ -102,7 +102,7 @@ flowchart TD
 | YAML dos agentes especialistas | `agents/agente_<nome>.yaml` | ⬜ A IMPLEMENTAR |
 | Ferramentas Python dos agentes | `tools/tool_<nome>.py` | ⬜ A IMPLEMENTAR |
 | YAML do Guardião | `agents/agente_guardiao.yaml` | ⬜ A IMPLEMENTAR |
-| Interface Streamlit | `conecta-conselho/app.py` | ⬜ A IMPLEMENTAR |
+| Interface web (React + FastAPI) | `frontend/` e `api/` | ✅ IMPLEMENTADA (Streamlit em `conecta-conselho/app.py` = legado) |
 | Testes de integração | `conecta-conselho/tests/test_integracao.py` | ⬜ A IMPLEMENTAR |
 
 ---
@@ -513,7 +513,7 @@ inteli_girls/                          ← raiz do repositório
 │   ├── tool_orcamento.py              ← Integrante 4
 │   └── tool_pontes.py                 ← Integrante 5
 ├── conecta-conselho/                  ← núcleo da aplicação (compartilhado)
-│   ├── app.py                         ← interface Streamlit (⬜ A IMPLEMENTAR)
+│   ├── app.py                         ← interface Streamlit (legado; a interface atual está em frontend/ e api/)
 │   ├── data/
 │   │   ├── regioes.json               ← FONTE ÚNICA DA VERDADE (não editar)
 │   │   ├── regioes.csv                ← gerado automaticamente
@@ -1364,7 +1364,7 @@ Sistema **Conecta Conselho**, ADK 2.19.1, Python 3.12, base simulada em `conecta
 
 ### Papel Específico
 
-Você é o **Agente Guardião**. A consolidação é feita em **Python determinístico** pela função `consolidar_pareceres` em `tools/tool_guardiao.py`. No modo nuvem, o Streamlit chama os 5 agentes do watsonx Orchestrate em paralelo e consolida localmente. O Guardião como agente com colaboradores no Orchestrate foi testado e descartado porque o LLM não encadeava a consolidação de forma confiável — a ferramenta `consolidar_pareceres` não era chamada consistentemente.
+Você é o **Agente Guardião**. A consolidação é feita em **Python determinístico** pela função `consolidar_pareceres` em `tools/tool_guardiao.py`. No modo nuvem, a interface (via API; no legado, o Streamlit) chama os 5 agentes do watsonx Orchestrate em paralelo e consolida localmente. O Guardião como agente com colaboradores no Orchestrate foi testado e descartado porque o LLM não encadeava a consolidação de forma confiável — a ferramenta `consolidar_pareceres` não era chamada consistentemente.
 
 ### Objetivo
 
@@ -1565,6 +1565,8 @@ conecta-conselho/tests/test_guardiao.py
 
 ## 12. Prompt Oficial — Interface Streamlit
 
+> ⚠️ **Seção legada.** A interface oficial agora é o front-end **React** (`frontend/`) com backend **FastAPI** (`api/`) — veja o [README](../../README.md) para rodar. Este prompt descreve a primeira versão em Streamlit, mantida em `conecta-conselho/app.py` apenas como referência.
+
 > Copie e cole este prompt no IBM Bob para desenvolver a Interface Streamlit.
 
 ---
@@ -1705,10 +1707,10 @@ st.caption("⚠️ Todos os dados são SIMULADOS e fictícios.")
 
 ### Passo a Passo
 
-1. Verificar que `pip show streamlit` funciona no `venv`.
+1. Verificar que `pip show fastapi uvicorn` funciona no `venv` e que `node --version` é 18 ou superior.
 2. Criar `conecta-conselho/integracao.py` com resposta simulada.
 3. Criar `conecta-conselho/app.py` usando a estrutura recomendada.
-4. Testar localmente: `streamlit run conecta-conselho/app.py`.
+4. Testar localmente: `uvicorn api.main:app --reload --port 8000` (terminal 1) e `cd frontend; npm run dev` (terminal 2); abrir http://localhost:5173.
 5. Verificar que todas as seis regiões carregam sem erro.
 6. Verificar que o aviso de dados simulados aparece em todas as páginas.
 7. Criar `conecta-conselho/tests/test_app.py` com testes básicos.
@@ -1723,7 +1725,7 @@ st.caption("⚠️ Todos os dados são SIMULADOS e fictícios.")
 
 ### Critérios de Aceitação
 
-- [ ] Interface inicia sem erros: `streamlit run conecta-conselho/app.py`.
+- [ ] Interface inicia sem erros: backend `uvicorn api.main:app --port 8000` + front `cd frontend; npm run dev`.
 - [ ] Todas as seis regiões podem ser selecionadas e analisadas.
 - [ ] Dados das cinco perspectivas são exibidos.
 - [ ] Aviso de dados simulados visível em todas as páginas.
@@ -1859,9 +1861,9 @@ python -m pytest conecta-conselho/tests/test_dados_regioes.py -v
 - [ ] Divergências são identificadas quando critérios são atendidos.
 - [ ] Região inexistente retorna `erro != null`.
 
-#### Para a Interface Streamlit
+#### Para a Interface Web (React + FastAPI)
 
-- [ ] Inicia sem erros: `streamlit run conecta-conselho/app.py`.
+- [ ] Inicia sem erros: backend `uvicorn api.main:app --port 8000` + front `cd frontend; npm run dev`.
 - [ ] As 6 regiões aparecem na lista de seleção.
 - [ ] Dados das 5 perspectivas são exibidos após seleção.
 - [ ] Aviso de dados simulados visível em todas as telas.
@@ -1870,7 +1872,7 @@ python -m pytest conecta-conselho/tests/test_dados_regioes.py -v
 
 #### Testes de Integração
 
-- [ ] Fluxo completo: `regiao_id` → Guardião → 5 especialistas → consolidação → Streamlit.
+- [ ] Fluxo completo: `regiao_id` → Guardião → 5 especialistas → consolidação → interface web.
 - [ ] Resposta do Guardião passa validação do contrato (Seção 11).
 - [ ] Troca de `_resposta_simulada` por resposta real não quebra a interface.
 
@@ -1944,8 +1946,8 @@ python -m pytest conecta-conselho/tests/test_agente_mercado.py -v
 |---|---|
 | **Todos** | Merge dos PRs aprovados para `develop`. |
 | **Guardião** | Importar Guardião no workspace. Testar com todos os 6 IDs. |
-| **Streamlit** | Substituir `_resposta_simulada` por chamada real ao Guardião em `integracao.py`. |
-| **Todos** | Testar fluxo completo: Streamlit → Guardião → 5 especialistas → resultado. |
+| **Streamlit** | Substituir `_resposta_simulada` por chamada real ao Guardião em `integracao.py` (usada pela API em `api/`). |
+| **Todos** | Testar fluxo completo: Interface web → Guardião → 5 especialistas → resultado. |
 | **Todos** | Criar testes de integração. |
 
 **Entrega do dia:** Fluxo completo funcionando end-to-end com pelo menos 3 regiões.
@@ -1994,11 +1996,11 @@ O Guardião é **pronto** quando:
 - [ ] Divergências identificadas quando critérios são atendidos.
 - [ ] Todos os testes em `test_guardiao.py` passam.
 
-### 16.3 Interface Streamlit Pronta
+### 16.3 Interface Web Pronta
 
 A interface está **pronta** quando:
 
-- [ ] `streamlit run conecta-conselho/app.py` inicia sem erros.
+- [ ] Backend (`uvicorn api.main:app`) e front (`npm run dev` em `frontend/`) iniciam sem erros.
 - [ ] As 6 regiões estão disponíveis para seleção.
 - [ ] Dados das 5 perspectivas são exibidos por aba.
 - [ ] Aviso de dados simulados visível em todas as páginas.
@@ -2013,7 +2015,7 @@ O MVP está **pronto** quando:
 - [ ] `python -m pytest -q` com todos os testes passando.
 - [ ] 5 agentes especialistas passando todos os seus testes.
 - [ ] Guardião passando todos os seus testes.
-- [ ] Interface Streamlit funcionando com integração real (não simulada).
+- [ ] Interface web funcionando com integração real (não simulada).
 - [ ] Fluxo completo demonstrado para todos os 6 IDs sem erros.
 - [ ] Demonstração cobre: seleção de região, análise, resultado por perspectiva, recomendação, histórico, ranking.
 - [ ] Nenhuma credencial ou API key exposta no repositório.

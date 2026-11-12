@@ -1,0 +1,8 @@
+# Dependências mínimas para rodar o site (API + front) em hospedagem.
+# Python 3.12 obrigatório. Para desenvolvimento use requirements.txt.
+ibm-watsonx-orchestrate==2.19.1
+pydantic==2.14.2
+python-dotenv==1.2.4
+requests==2.34.2
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
