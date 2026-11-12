@@ -28,12 +28,12 @@ Dados públicos (IBGE, Anatel, INEP, CNES; só fontes abertas)
            mostra a confiança e explica o motivo
                     │
                     ▼
-  Investir agora | Começar com piloto | Esperar | Escalar a um humano
+  Investir agora · Realizar piloto · Aguardar, com alerta de atenção prioritária
 ```
 
-**A decisão pode ser:** Investir agora · Começar com piloto · Esperar · Escalar a um humano.
+**A decisão pode ser:** Investir agora · Realizar piloto · Aguardar, com alerta de atenção prioritária quando uma dimensão critica.
 
-O Agente de Pontes (em destaque) amplia as opções do debate procurando escolas, postos de saúde e prefeituras que sirvam de clientes âncora. O Guardião escolhe entre quatro resultados e, quando a confiança é baixa, escala para uma pessoa.
+O Agente de Pontes (em destaque) amplia as opções do debate procurando escolas, postos de saúde e prefeituras que sirvam de clientes âncora. O Guardião escolhe entre três resultados (**Investir agora**, **Realizar piloto**, **Aguardar**) e, quando alguma dimensão atinge um patamar crítico, emite o **Alerta de Atenção Prioritária** sinalizando que a revisão humana é essencial antes de qualquer decisão.
 
 ## 2. O papel de cada agente
 
@@ -65,7 +65,7 @@ O Guardião nunca entrega só uma resposta: entrega decisão, confiança e motiv
 
 - **Explicação:** cada decisão mostra os argumentos de cada agente e o que pesou mais.
 - **Confiança:** cada decisão vem com um nível de confiança.
-- **Escalonamento:** confiança baixa ou agentes em forte desacordo levam a decisão para uma pessoa.
+- **Alerta de Atenção Prioritária:** quando uma dimensão atinge patamar crítico, o sistema sinaliza que a revisão humana é essencial antes de qualquer decisão; a recomendação (**Investir agora**, **Realizar piloto** ou **Aguardar**) é sempre exibida junto ao alerta.
 - **Sem dados pessoais:** só fontes públicas e abertas, sem dados de clientes.
 
 ---
@@ -89,7 +89,7 @@ Usuário principal: analista ou gerente de planejamento de expansão de uma oper
 5. Visualiza pareceres independentes dos agentes de Mercado, Impacto Social, Engenharia e Orçamento.
 6. O Agente de Pontes identifica possíveis instituições âncora e sugere um cenário de articulação, sem presumir contratos firmados.
 7. Motor determinístico compara cenário base e cenário com pontes.
-8. O Guardião sintetiza convergências, divergências, incertezas e recomenda **Investir agora**, **Começar com piloto**, **Esperar** ou **Escalar a um humano**.
+8. O Guardião sintetiza convergências, divergências, incertezas e recomenda **Investir agora**, **Realizar piloto** ou **Aguardar**; quando alguma dimensão critica, emite o **Alerta de Atenção Prioritária**.
 9. Usuário consulta evidências, limitações e trilha de auditoria; pode exportar relatório JSON.
 
 ### 5.4 Fora do escopo do MVP

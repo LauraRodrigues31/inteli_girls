@@ -41,45 +41,100 @@ Nova União: `analisar_orcamento` retorna `confiança = baixa` pois a margem men
 Fórmula do consolidado: `round(0.20·mercado + 0.20·social + 0.25·engenharia + 0.25·orçamento + 0.10·pontes)`
 
 Critérios de recomendação (Seção 11, PADRÃO):
-- `escalar`: consolidado < 30 *OU* engenharia < 20 *OU* orçamento < 20 *OU* algum parecer com erro ou confiança baixa (regra adotada pelo grupo — ver Nota 1) — **avaliada antes das demais**
+- `analise_incompleta`: algum parecer com erro, confiança baixa, `orçamento < 20`, `engenharia < 20` ou `score_consolidado < 30` — **avaliada antes das demais**
 - `investir_agora`: consolidado ≥ 70 **E** orçamento ≥ 60 **E** engenharia ≥ 60
 - `realizar_piloto`: consolidado ≥ 50 e não atende `investir_agora`
 - `aguardar`: 30 ≤ consolidado < 50
+
+O **Alerta de Atenção Prioritária** (`atencao_prioritaria: true`) é acionado quando pontos críticos indicam risco elevado dentro de uma recomendação válida. Nova União recebe `aguardar` com `atencao_prioritaria: true`.
 
 Regras de divergência identificadas pelo Guardião (`_identificar_divergencias` em `tools/tool_guardiao.py`):
 1. **D1** — `|social − orçamento| > 30`: divergência nos **dois sentidos** — tanto orçamento alto com social baixo quanto social alto com orçamento baixo
 2. **D2** — `engenharia < 40` e `mercado > 60`: boa demanda mas viabilidade técnica baixa
 3. **D3** — `pontes > 70` e `orçamento < 40`: parcerias podem viabilizar o que o orçamento não consegue sozinho
 
-| Região | Consolidado | Recomendação | Divergências |
-|---|:---:|---|---|
-| Aurora | **62** | `realizar_piloto` | **D1**: \|social 38 − orçamento 78\| = 40 > 30 → alto orçamento contrastado com baixo impacto social |
-| Horizonte | **57** | `realizar_piloto` | Nenhuma (\|social 76 − orçamento 60\| = 16 < 30; eng=49 ≥ 40; pontes=43 < 70) |
-| Esperança | **44** | `aguardar` | **D1**: \|social 66 − orçamento 20\| = 46 > 30 (alto impacto social, baixa viabilidade financeira). **D2**: eng=34 < 40 e mercado=63 > 60 (boa demanda, viabilidade técnica insuficiente) |
-| Central | **60** | `realizar_piloto` | **D1**: \|social 30 − orçamento 76\| = 46 > 30 → alto orçamento contrastado com baixo impacto social |
-| Vale Verde | **60** | `realizar_piloto` | Nenhuma (\|social 59 − orçamento 58\| = 1 < 30; pontes=80 mas orçamento=58 ≥ 40) |
-| Nova União | **30** | `escalar` | **D1**: \|social 78 − orçamento 0\| = 78 > 30 (alto impacto social, viabilidade financeira nula). Escalonamento por: orçamento=0 < 20, engenharia=11 < 20 e confiança do Orçamento = baixa |
+| Região | Consolidado | Recomendação | Alerta | Divergências |
+|---|:---:|---|:---:|---|
+| Aurora | **62** | `realizar_piloto` | — | **D1**: \|social 38 − orçamento 78\| = 40 > 30 → alto orçamento contrastado com baixo impacto social |
+| Horizonte | **57** | `realizar_piloto` | — | Nenhuma |
+| Esperança | **44** | `aguardar` | — | **D1**: \|social 66 − orçamento 20\| = 46 > 30. **D2**: eng=34 < 40 e mercado=63 > 60 |
+| Central | **60** | `realizar_piloto` | — | **D1**: \|social 30 − orçamento 76\| = 46 > 30 |
+| Vale Verde | **60** | `realizar_piloto` | — | Nenhuma |
+| Nova União | **30** | `aguardar` | ⚠️ | **D1**: \|social 78 − orçamento 0\| = 78 > 30; pontos críticos: orçamento 0, engenharia 11, margem negativa |
 
 ---
 
-> **Nota 1 — Nova União: recomendação `escalar`**
-> Consolidado = 30, que pelos critérios básicos cairia em `aguardar` (30 ≤ consolidado < 50).
-> A **regra extra adotada pelo grupo** (implementada em `_determinar_recomendacao` no `tools/tool_guardiao.py`)
-> força `escalar` quando: orçamento < 20 **OU** engenharia < 20 **OU** qualquer parecer com
-> `erro != null` ou `confianca == "baixa"`.
->
-> Nova União aciona três gatilhos simultâneos:
-> - orçamento = 0 < 20
-> - engenharia = 11 < 20
-> - confiança do Orçamento = `baixa` (margem mensal negativa)
->
-> O teste `test_nova_uniao_recomendacao_escalar` e a saída real do Guardião confirmam `escalar`.
+## Motivos e Caminhos por Região
 
-> **Nota 2 — Nenhuma região atinge `investir_agora` com a base atual:**
+Textos extraídos de `consolidar_pareceres` (`chamar_guardiao(regiao, fonte="local")`).
+
+### Esperança — Aguardar (score 44)
+
+**Motivos:**
+- Engenharia (score 34): backbone a 62 km; 8% de cobertura de fibra; prazo de 20 meses.
+- Orçamento (score 20): orçamento cobre 57,5% do CAPEX (déficit de R$ 3.700.000); payback de 107 meses.
+- Pontes (score 43): 4 parceiros possíveis; maturidade de parcerias baixa.
+
+**Caminhos para viabilizar:**
+- Tecnologias alternativas viáveis: Fibra óptica FTTH para área central, Fixed Wireless Access (FWA) para encostas e áreas de difícil acesso, Conexão via satélite LEO para comunidades isoladas.
+- Oportunidades de redução de custos via parcerias: Compartilhamento de infraestrutura de postes com distribuidora de energia.
+- Infraestrutura compartilhável identificada: pode reduzir CAPEX.
+- 4 instituições âncora identificadas com potencial de economia de 28,0% nos custos.
+- Implantação em fases: o orçamento cobre 57,5% do CAPEX (déficit de R$ 3.700.000).
+
+### Nova União — Aguardar ⚠️ (score 30, atencao_prioritaria: true)
+
+**Pontos críticos:**
+- Orçamento com score 0: margem mensal de R$ -50.002,15; cobertura orçamentária de 28,0%; déficit de R$ 9.000.000.
+- Engenharia com score 11: backbone a 98 km; 0% de cobertura de fibra; prazo de implantação de 28 meses.
+- Confiança baixa no parecer de Orçamento.
+
+**Motivos:**
+- Engenharia (score 11): backbone a 98 km; 0% de cobertura de fibra; prazo de 28 meses.
+- Orçamento (score 0): orçamento cobre 28,0% do CAPEX (déficit de R$ 9.000.000); payback indefinido (margem negativa); margem mensal negativa (R$ -50.002,15).
+- Pontes (score 21): 3 parceiros possíveis; maturidade de parcerias baixa.
+
+**Caminhos para viabilizar:**
+- Tecnologias alternativas viáveis: Conexão via satélite LEO (única opção de curto prazo), Fixed Wireless Access (FWA) com backhaul via satélite, Fibra óptica FTTH apenas a longo prazo, condicionado a expansão de backbone.
+- Oportunidades de redução de custos via parcerias: Uso de satélite LEO elimina necessidade de infraestrutura terrestre de backhaul.
+- 3 instituições âncora identificadas com potencial de economia de 12,0% nos custos.
+- Implantação em fases: o orçamento cobre 28,0% do CAPEX (déficit de R$ 9.000.000).
+
+---
+
+## Cenários Simulados
+
+Resultados de `simular_cenario` (`conecta-conselho/simulador.py`) — recalculado localmente com as mesmas regras dos agentes.
+
+> ⚠️ **Dados simulados.** Os cenários abaixo são hipotéticos e demonstrativos.
+
+| Região | Parâmetro alterado | Score base | Rec. base | Score simulado | Rec. simulada | Alerta |
+|---|---|:---:|---|:---:|---|:---:|
+| Esperança | *(base — sem alteração)* | 44 | `aguardar` | 44 | `aguardar` | — |
+| Esperança | `usar_parcerias=True` | 44 | `aguardar` | **50** | **`realizar_piloto`** | — |
+| Esperança | `distancia_backbone_km=20` | 44 | `aguardar` | **46** | `aguardar` | — |
+| Esperança | `backbone=20 km + parcerias` | 44 | `aguardar` | **53** | **`realizar_piloto`** | — |
+| Esperança | `teto=R$ 8.700.000` (= CAPEX) | 44 | `aguardar` | **51** | **`realizar_piloto`** | — |
+| Nova União | `usar_parcerias=True` | 30 | `aguardar` | **30** | `aguardar` | ⚠️ |
+| Nova União | `distancia_backbone_km=20` | 30 | `aguardar` | **35** | `aguardar` | ⚠️ |
+| Horizonte | `usar_parcerias=True` | 57 | `realizar_piloto` | **60** | `realizar_piloto` | — |
+
+**Interpretação do one-pager:** A Esperança demonstra que uma região em "Aguardar" pode virar "Realizar piloto" quando parcerias reduzem o CAPEX em 28% — de score 44 para 50. Nova União permanece em "Aguardar" com alerta mesmo com parcerias ou melhoria de backbone, pois a margem mensal é negativa e o déficit orçamentário é estrutural.
+
+---
+
+> **Nota — Nova União: recomendação `aguardar` com `atencao_prioritaria: true`**
+> Consolidado = 30 (30 ≤ score < 50 → `aguardar`). O sistema aciona o alerta de atenção prioritária
+> pelos três gatilhos simultâneos:
+> - orçamento = 0 (margem mensal negativa — R$ -50.002,15)
+> - engenharia = 11 (backbone a 98 km, 0% de fibra)
+> - confiança do Orçamento = baixa
+
+> **Nota — Nenhuma região atinge `investir_agora` com a base atual:**
 > O critério exige consolidado ≥ 70 **E** orçamento ≥ 60 **E** engenharia ≥ 60.
 > A região com melhor consolidado é Aurora (62) e Central/Vale Verde (60) — todas abaixo de 70.
 
 ---
 
-*Gerado em: 2026-11-03 | Commit: `1010f96` | Branch: `docs/roteiro-demo`*
-*Fonte: saída real de `tools/tool_guardiao.py` (`consolidar_pareceres`) e tools especializadas | Fórmulas: PADRAO_DESENVOLVIMENTO_AGENTES.md Seções 6–11*
+*Atualizado em: 2026-11-05 | Branch: `docs/documentacao-final`*
+*Fonte: saída real de `tools/tool_guardiao.py` (`consolidar_pareceres`) e `conecta-conselho/simulador.py` | Fórmulas: PADRAO_DESENVOLVIMENTO_AGENTES.md Seções 6–11*

@@ -1364,11 +1364,11 @@ Sistema **Conecta Conselho**, ADK 2.19.1, Python 3.12, base simulada em `conecta
 
 ### Papel Específico
 
-Você é o **Agente Guardião**. Recebe uma `regiao_id`, invoca os cinco agentes especialistas, consolida seus pareceres, identifica divergências e produz uma recomendação final fundamentada. É o agente com quem a interface (via API) se comunica diretamente.
+Você é o **Agente Guardião**. A consolidação é feita em **Python determinístico** pela função `consolidar_pareceres` em `tools/tool_guardiao.py`. No modo nuvem, a interface (via API; no legado, o Streamlit) chama os 5 agentes do watsonx Orchestrate em paralelo e consolida localmente. O Guardião como agente com colaboradores no Orchestrate foi testado e descartado porque o LLM não encadeava a consolidação de forma confiável — a ferramenta `consolidar_pareceres` não era chamada consistentemente.
 
 ### Objetivo
 
-Consolidar os cinco pareceres especialistas em uma análise integrada, identificar conflitos entre perspectivas, e classificar a região em uma das quatro recomendações possíveis.
+Consolidar os cinco pareceres especialistas em uma análise integrada, identificar conflitos entre perspectivas, e classificar a região em uma das **três** recomendações determinísticas possíveis. A decisão final é sempre de uma pessoa humana.
 
 ### Dados de Entrada
 
@@ -1383,7 +1383,7 @@ Consolidar os cinco pareceres especialistas em uma análise integrada, identific
   "agente": "guardiao",
   "regiao_id": "string",
   "regiao_nome": "string",
-  "recomendacao": "investir_agora|realizar_piloto|aguardar|escalar",
+  "recomendacao": "investir_agora|realizar_piloto|aguardar",
   "score_consolidado": 0,
   "pareceres": {
     "mercado":       { "score": 0, "confianca": "alta", "justificativa": "..." },
@@ -1406,7 +1406,12 @@ Consolidar os cinco pareceres especialistas em uma análise integrada, identific
 
 | Campo | Tipo | Descrição |
 |---|---|---|
-| `recomendacao` | `string` | Um de quatro valores definidos abaixo. |
+| `recomendacao` | `string` | Um de três valores definidos abaixo (sem "escalar"). |
+| `atencao_prioritaria` | `boolean` | `true` quando score < 30, orçamento < 20 ou engenharia < 20, ou confiança baixa. |
+| `pontos_criticos` | `array[string]` | Frases explicando cada ponto crítico identificado. |
+| `motivos` | `array[string]` | Motivos detalhados (preenchido apenas quando recomendação = "aguardar"). |
+| `caminhos` | `array[string]` | Caminhos para viabilização (preenchido apenas quando recomendação = "aguardar"). |
+| `status` | `string` | `"concluida"` ou `"analise_incompleta"` (quando algum agente falhou). |
 | `score_consolidado` | `integer` | Média ponderada dos cinco scores. Ver metodologia. |
 | `pareceres` | `object` | Resumo dos cinco pareceres (não repete os `indicadores` brutos). |
 | `divergencias` | `array[string]` | Tensões identificadas entre perspectivas. Pode ser vazio. |
@@ -1442,36 +1447,49 @@ def calcular_score_consolidado(pareceres: dict) -> int:
     """
 ```
 
-### Critérios de Recomendação (objetivos)
+### Critérios de Recomendação (objetivos, sem "escalar")
 
 | Recomendação | Critério |
 |---|---|
 | `"investir_agora"` | `score_consolidado >= 70` **E** `orcamento.score >= 60` **E** `engenharia.score >= 60` |
 | `"realizar_piloto"` | `score_consolidado >= 50` **E** NÃO atende critérios de `"investir_agora"` |
-| `"aguardar"` | `score_consolidado >= 30` **E** `score_consolidado < 50` |
-| `"escalar"` | `score_consolidado < 30` — condições insuficientes para investimento no momento |
+| `"aguardar"` | `score_consolidado < 50` |
+
+**Atenção prioritária** (`atencao_prioritaria = true`) é disparada independentemente da recomendação quando:
+- `engenharia.score < 20`
+- `orcamento.score < 20`
+- `score_consolidado < 30`
+- qualquer agente com `confianca == "baixa"`
 
 > **Hipótese de MVP documentada:** os pesos e limiares acima são premissas de desenvolvimento para fins de demonstração. Não representam metodologia de decisão real de investimento.
 
 ### Identificação de Divergências
 
-O Guardião deve identificar e registrar no campo `divergencias` quando:
-- `impacto_social.score` difere de `orcamento.score` em mais de 30 pontos (alto impacto social mas baixa viabilidade financeira).
-- `engenharia.score` é menor que 40 mas `mercado.score` é maior que 60 (boa demanda, viabilidade técnica baixa).
-- `pontes.score` é maior que 70 mas `orcamento.score` é menor que 40 (parcerias podem viabilizar o que o orçamento não consegue sozinho).
+O Guardião identifica e registra no campo `divergencias` as seguintes situações (implementadas em `_identificar_divergencias` de `tool_guardiao.py`):
 
-Exemplo de divergência registrada:
-```json
-"divergencias": [
-  "Alto impacto social (score 88) contrastado com viabilidade financeira baixa (score 12). Parcerias e subsídios podem ser necessários para viabilização."
-]
-```
+**D1 — Divergência entre Impacto Social e Orçamento** (`abs(social − orcamento) > 30`):
+A regra vale nos **dois sentidos**, com texto diferente para cada direção:
+
+- **Social alto, orçamento baixo** (ex.: Nova União — social 78, orçamento 0):
+  > "Alto impacto social (score 78) contrastado com baixa viabilidade financeira (orçamento 0). Parcerias e subsídios podem ser necessários para viabilização."
+
+- **Orçamento alto, social baixo** (ex.: Central — orçamento 76, social 30):
+  > "Região financeiramente atrativa (orçamento 76), mas com baixo impacto social (social 30): avaliar contrapartidas sociais na expansão."
+
+**D2 — Boa demanda mas viabilidade técnica baixa** (`engenharia < 40` e `mercado > 60`):
+> "Boa demanda de mercado (score X) mas viabilidade técnica insuficiente (engenharia score Y). Expansão técnica necessária antes do investimento."
+
+**D3 — Parcerias fortes mas orçamento fraco** (`pontes > 70` e `orcamento < 40`):
+> "Forte potencial de parcerias (score X) pode viabilizar o que o orçamento não consegue sozinho (score Y). Estratégia de cofinanciamento recomendada."
+
+**Pareceres com erro** — se qualquer agente retornar `erro != null`, é registrado em `divergencias`:
+> "Parecer do agente 'engenharia' retornou erro: \<mensagem\>. Score utilizado: 0."
 
 ### Arquivos Permitidos
 
-**Criar:** `agents/agente_guardiao.yaml`, `conecta-conselho/tests/test_guardiao.py`
+**Criar/atualizar:** `tools/tool_guardiao.py` (ferramenta Python com `consolidar_pareceres`), `agents/agente_guardiao.yaml`, `conecta-conselho/tests/test_guardiao.py`
 
-**O Guardião não possui ferramenta Python própria.** Ele invoca os agentes especialistas como sub-agentes via watsonx Orchestrate.
+**A consolidação é feita em Python determinístico** em `tools/tool_guardiao.py`. O Guardião como agente com colaboradores no Orchestrate foi descartado.
 
 **Nunca modificar:** `conecta-conselho/data/regioes.json`, ferramentas e agentes dos especialistas.
 
@@ -1506,14 +1524,15 @@ def test_guardiao_retorna_todos_pareceres():
         assert agente in r["pareceres"]
 
 def test_recomendacao_valores_validos():
-    validos = {"investir_agora", "realizar_piloto", "aguardar", "escalar"}
+    validos = {"investir_agora", "realizar_piloto", "aguardar"}
     for rid in ["aurora", "horizonte", "central", "nova_uniao"]:
-        r = analisar_guardiao(rid)
+        r = consolidar_pareceres(rid)
         assert r["recomendacao"] in validos
 
-def test_nova_uniao_recomendacao_escalar():
-    r = analisar_guardiao("nova_uniao")
-    assert r["recomendacao"] == "escalar"
+def test_nova_uniao_recomendacao_aguardar_com_alerta():
+    r = consolidar_pareceres("nova_uniao")
+    assert r["recomendacao"] == "aguardar"
+    assert r["atencao_prioritaria"] is True
 
 def test_score_consolidado_entre_0_e_100():
     for rid in ["aurora", "horizonte", "central"]:
@@ -1528,10 +1547,11 @@ def test_regiao_inexistente_retorna_erro():
 ### Critérios de Aceitação
 
 - [ ] Retorna os cinco pareceres para todos os IDs válidos.
-- [ ] `recomendacao` é sempre um dos quatro valores válidos.
-- [ ] Nova União recebe `"escalar"` (pior viabilidade geral).
+- [ ] `recomendacao` é sempre um de: `investir_agora`, `realizar_piloto`, `aguardar`.
+- [ ] Nova União recebe `"aguardar"` com `atencao_prioritaria = true`.
 - [ ] `score_consolidado` entre 0 e 100.
 - [ ] Divergências identificadas quando critérios são atendidos.
+- [ ] `motivos` e `caminhos` preenchidos apenas para `"aguardar"`.
 - [ ] Todos os testes passam.
 
 ### Entrega Esperada
@@ -1727,8 +1747,8 @@ conecta-conselho/tests/test_app.py
 ### 13.1 Estratégia de Branches
 
 ```
-main                          ← branch protegida; apenas merge via PR aprovado
-└── chore/estrutura-pastas    ← branch atual (base do projeto)
+main                          ← branch protegida; apenas merge via PR (release final)
+└── develop                   ← branch de integração (base de todo desenvolvimento)
     ├── feature/agente-mercado     ← Integrante 1
     ├── feature/agente-social      ← Integrante 2
     ├── feature/agente-engenharia  ← Integrante 3
@@ -1737,13 +1757,15 @@ main                          ← branch protegida; apenas merge via PR aprovado
     └── feature/streamlit          ← interface (desenvolvida em paralelo)
 ```
 
-Cada integrante cria sua branch a partir de `chore/estrutura-pastas`:
+Cada integrante cria sua branch a partir de `develop` atualizada:
 
 ```bash
-git checkout chore/estrutura-pastas
+git checkout develop
 git pull
 git checkout -b feature/agente-mercado
 ```
+
+O release final é feito via PR `develop → main` (tarefa da Laura).
 
 ### 13.2 Responsabilidade por Arquivos
 
@@ -1834,7 +1856,7 @@ python -m pytest conecta-conselho/tests/test_dados_regioes.py -v
 
 - [ ] Retorna os cinco pareceres para todos os IDs válidos.
 - [ ] `recomendacao` é sempre um dos quatro valores válidos.
-- [ ] Nova União (`payback_meses = null`) recebe recomendação `"escalar"`.
+- [ ] Nova União (`payback_meses = null`) recebe recomendação `"aguardar"` com `atencao_prioritaria = true`.
 - [ ] `score_consolidado` usa os pesos documentados na Seção 11.
 - [ ] Divergências são identificadas quando critérios são atendidos.
 - [ ] Região inexistente retorna `erro != null`.
@@ -1858,10 +1880,10 @@ python -m pytest conecta-conselho/tests/test_dados_regioes.py -v
 
 | Critério | Mínimo exigido |
 |---|---|
-| Testes da base | 204/204 passando |
+| Testes da base | `python -m pytest -q` com todos os testes passando |
 | Testes do agente individual | 100% dos testes do arquivo próprio |
 | Testes do Guardião | 100% dos testes definidos na Seção 11 |
-| Merge para `chore/estrutura-pastas` | Sem regressão em testes existentes |
+| Merge para `develop` (PR revisado); release `develop → main` | Sem regressão em testes existentes |
 | Demonstração final | Análise completa das 6 regiões sem erro |
 
 ### 14.4 Executar Todos os Testes
@@ -1912,7 +1934,7 @@ python -m pytest conecta-conselho/tests/test_agente_mercado.py -v
 | Quem | Tarefa |
 |---|---|
 | **Integrantes 1–5** | Executar suite completa de testes. Corrigir falhas. |
-| **Integrantes 1–5** | Abrir PR para `chore/estrutura-pastas`. Aguardar 1 revisão. |
+| **Integrantes 1–5** | Abrir PR para `develop`. Aguardar 1 revisão. |
 | **Streamlit** | Interface completa: análise, resultados simulados, histórico, ranking. |
 | **Guardião** | Criar YAML do Guardião e conectar aos cinco agentes. Testar consolidação. |
 
@@ -1922,7 +1944,7 @@ python -m pytest conecta-conselho/tests/test_agente_mercado.py -v
 
 | Quem | Tarefa |
 |---|---|
-| **Todos** | Merge dos PRs aprovados para `chore/estrutura-pastas`. |
+| **Todos** | Merge dos PRs aprovados para `develop`. |
 | **Guardião** | Importar Guardião no workspace. Testar com todos os 6 IDs. |
 | **Streamlit** | Substituir `_resposta_simulada` por chamada real ao Guardião em `integracao.py` (usada pela API em `api/`). |
 | **Todos** | Testar fluxo completo: Interface web → Guardião → 5 especialistas → resultado. |
@@ -1937,7 +1959,7 @@ python -m pytest conecta-conselho/tests/test_agente_mercado.py -v
 | **Todos** | Corrigir bugs identificados na integração. |
 | **Todos** | Executar suite completa: `pytest conecta-conselho/tests/ -v`. |
 | **Todos** | Preparar demonstração: analisar as 6 regiões, documentar resultados. |
-| **Todos** | Merge final para `chore/estrutura-pastas`. |
+| **Todos** | Merge final para `develop`. Release `develop → main` feito pela Laura. |
 | **Todos** | Demonstração para a equipe. |
 
 **Entrega do dia:** MVP completo, 204+ testes passando, demonstração das 6 regiões.
@@ -1965,10 +1987,11 @@ Um agente especialista é considerado **pronto** quando:
 
 O Guardião é **pronto** quando:
 
-- [ ] YAML do Guardião importado no workspace.
-- [ ] Invoca corretamente os 5 agentes especialistas e consolida respostas.
-- [ ] Retorna `recomendacao` válido para todos os 6 IDs.
-- [ ] Nova União recebe `"escalar"`.
+- [ ] `tools/tool_guardiao.py` implementa `consolidar_pareceres` com lógica determinística em Python.
+- [ ] No modo nuvem, o Streamlit chama os 5 agentes em paralelo e consolida localmente.
+- [ ] Retorna `recomendacao` válido (`investir_agora` | `realizar_piloto` | `aguardar`) para todos os 6 IDs.
+- [ ] **Nova União recebe `"aguardar"` com `atencao_prioritaria = true`** (score 30, margem negativa).
+- [ ] `status = "analise_incompleta"` quando algum agente falha.
 - [ ] `score_consolidado` calculado com os pesos documentados.
 - [ ] Divergências identificadas quando critérios são atendidos.
 - [ ] Todos os testes em `test_guardiao.py` passam.
@@ -1989,7 +2012,7 @@ A interface está **pronta** quando:
 
 O MVP está **pronto** quando:
 
-- [ ] 204 testes da base passando.
+- [ ] `python -m pytest -q` com todos os testes passando.
 - [ ] 5 agentes especialistas passando todos os seus testes.
 - [ ] Guardião passando todos os seus testes.
 - [ ] Interface web funcionando com integração real (não simulada).
@@ -1997,9 +2020,60 @@ O MVP está **pronto** quando:
 - [ ] Demonstração cobre: seleção de região, análise, resultado por perspectiva, recomendação, histórico, ranking.
 - [ ] Nenhuma credencial ou API key exposta no repositório.
 - [ ] Todos os arquivos com aviso `SIMULADO` nas docstrings.
-- [ ] Merge final para `chore/estrutura-pastas` aprovado.
+- [ ] PRs mergeados para `develop`; release `develop → main` aprovado.
 
 ---
 
-*Documento gerado em: 2026-11-02 | Versão: 1.0.0 | Sistema: Conecta Conselho — MVP*
+## 17. Simulador de Cenários
+
+O **Simulador de Cenários** (`conecta-conselho/simulador.py`) permite comparar o cenário base de uma região com um cenário hipotético, aplicando ajustes determinísticos sem consultar a IBM.
+
+### 17.1 Função Principal
+
+```python
+simular_cenario(
+    regiao_id: str,
+    distancia_backbone_km: float | None = None,
+    teto_investimento_reais: float | None = None,
+    usar_parcerias: bool = False,
+) -> dict
+```
+
+O retorno inclui `base`, `simulado`, `mudancas`, `premissas` e `simulado_localmente = True`.
+
+### 17.2 Premissas do Motor
+
+| Parâmetro | Regra aplicada |
+|---|---|
+| `usar_parcerias` | `CAPEX_novo = round(capex × (1 − percentual_economia_potencial_pct / 100))` com o percentual vindo de `parcerias.percentual_economia_potencial_pct`. Orçamento e payback são recalculados. |
+| `distancia_backbone_km` | Substitui `distancia_backbone_km` nos dados de engenharia e recalcula com `calcular_score_engenharia(dados)` do `tool_engenharia`. No parecer de engenharia são atualizados: o `score`, o indicador `distancia_backbone_km` e o indicador `score_backbone`. |
+| `teto_investimento_reais` | Substitui `orcamento_disponivel_reais` para o cálculo dos indicadores financeiros. |
+| Payback (quando CAPEX ou orçamento muda) | `payback_novo = round(capex / (receita - opex))` se margem > 0; caso contrário `None`. Recalculado com `calcular_indicadores_financeiros` e `calcular_score_orcamento` do `tool_orcamento`. |
+| Mercado, Impacto Social, Pontes | **Não mudam** no cenário simulado. |
+
+### 17.3 Entradas Inválidas
+
+Retornam `{"erro": "<mensagem>"}` sem lançar exceção:
+- Região não encontrada
+- `distancia_backbone_km` fora de `[0, 200]`
+- `teto_investimento_reais ≤ 0`
+
+### 17.4 Valores de Referência (para testes)
+
+| Região | Parâmetro | Score base | Score simulado | Recomendação simulada |
+|---|---|---|---|---|
+| esperanca | base | 44 | 44 | aguardar |
+| esperanca | usar_parcerias=True | 44 | 50 | realizar_piloto |
+| esperanca | distancia_backbone_km=20 | 44 | 46 | aguardar |
+| esperanca | backbone 20 + parcerias | 44 | 53 | realizar_piloto |
+| esperanca | teto = 8.700.000 (CAPEX) | 44 | 51 | realizar_piloto |
+| nova_uniao | usar_parcerias=True | 30 | 30 | aguardar (alerta permanece) |
+| nova_uniao | distancia_backbone_km=20 | 30 | 35 | aguardar (alerta permanece) |
+| horizonte | usar_parcerias=True | 57 | 60 | realizar_piloto |
+
+> Parceria não resolve a margem negativa de Nova União: OPEX > receita, `payback = None`, score de orçamento permanece 0.
+
+---
+
+*Documento gerado em: 2026-11-02 | Versão: 1.1.0 | Sistema: Conecta Conselho — MVP*
 *Todos os dados da base de regiões são FICTÍCIOS e SIMULADOS.*

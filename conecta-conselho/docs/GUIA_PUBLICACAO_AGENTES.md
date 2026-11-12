@@ -266,7 +266,7 @@ Isso ocorre porque o CLI abre um prompt interativo que aguarda input do terminal
 ## 8. Resultados dos testes (Etapa 4 — cc_engenharia)
 
 Testes executados via `_build/test_cc_engenharia.py` contra o endpoint de runtime da instância SaaS
-(`jp-tok`), agente `cc_engenharia` (id `22960685-5461-4fbd-96cd-adf2518efcde`):
+(`jp-tok`), agente `cc_engenharia` (id `<seu-agent-id>`):
 
 | Status | Teste | Score esperado | Score obtido | Observação |
 |--------|-------|---------------|-------------|------------|

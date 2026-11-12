@@ -1,10 +1,15 @@
 """
 Camada de conexão com o IBM watsonx Orchestrate (modo nuvem).
 
+AVISO: Todos os dados processados por este módulo são SIMULADOS e FICTÍCIOS.
+Nenhum indicador representa região, operadora ou instituição real.
+
 Funções públicas
 ----------------
 carregar_credenciais() -> dict
-    Lê WXO_URL e WXO_API_KEY de variáveis de ambiente ou do .env na raiz.
+    Lê WXO_URL e WXO_API_KEY, com a seguinte prioridade:
+      1. Variáveis de ambiente do processo (os.environ) — usadas no Streamlit Cloud.
+      2. Arquivo .env na raiz do projecto — alternativa para desenvolvimento local.
     Devolve {"WXO_URL": ..., "WXO_API_KEY": ...} ou {"erro": "..."}.
 
 obter_token(api_key: str) -> str | dict
@@ -65,43 +70,48 @@ _IAM_URL = "https://iam.cloud.ibm.com/identity/token"
 
 def carregar_credenciais() -> dict:
     """
-    Lê WXO_URL e WXO_API_KEY.  Ordem de prioridade (por variável):
-
-      1. variáveis de ambiente do processo (usadas em hospedagem, ex.: Render);
-      2. arquivo .env na raiz do projecto (uso local), via python-dotenv.
+    Lê WXO_URL e WXO_API_KEY com a seguinte prioridade:
+      1. Variáveis de ambiente do processo (os.environ) — usadas no Streamlit Cloud,
+         onde as credenciais são expostas como variáveis de ambiente via "Secrets".
+      2. Arquivo .env na raiz do projecto — alternativa para desenvolvimento local.
 
     Não lança excepção: erros são devolvidos como {"erro": "..."}.
 
     Returns:
         {"WXO_URL": str, "WXO_API_KEY": str}  em caso de sucesso, ou
-        {"erro": str}  se alguma variável estiver ausente.
+        {"erro": str}  se nenhuma das fontes contiver as variáveis necessárias.
     """
-    valores: dict = dotenv_values(str(_ENV_FILE)) if _ENV_FILE.exists() else {}
+    # Fonte 1: variáveis de ambiente do processo (Streamlit Cloud / CI)
+    env_url = os.environ.get("WXO_URL", "").strip()
+    env_key = os.environ.get("WXO_API_KEY", "").strip()
 
-    def _obter(chave: str) -> str:
-        return (os.environ.get(chave) or valores.get(chave) or "").strip()
-
-    if not _ENV_FILE.exists() and not (os.environ.get("WXO_URL") or os.environ.get("WXO_API_KEY")):
+    if env_url and env_key:
         return {
-            "erro": (
-                f"Credenciais não encontradas: não há variáveis de ambiente WXO_URL/WXO_API_KEY "
-                f"nem ficheiro .env em {_ENV_FILE}"
-            )
+            "WXO_URL": env_url.rstrip("/"),
+            "WXO_API_KEY": env_key,
         }
 
-    ausentes = [k for k in ("WXO_URL", "WXO_API_KEY") if not _obter(k)]
+    # Fonte 2: arquivo .env (desenvolvimento local)
+    dot: dict[str, str] = {}
+    if _ENV_FILE.exists():
+        dot = {k: v for k, v in dotenv_values(str(_ENV_FILE)).items() if v}
+
+    url = (env_url or dot.get("WXO_URL", "")).strip()
+    key = (env_key or dot.get("WXO_API_KEY", "")).strip()
+
+    ausentes = [k for k, v in (("WXO_URL", url), ("WXO_API_KEY", key)) if not v]
     if ausentes:
         return {
             "erro": (
                 f"Variável(is) ausente(s): {', '.join(ausentes)}. "
-                "Defina WXO_URL e WXO_API_KEY no ficheiro .env na raiz do projecto "
-                "ou como variáveis de ambiente."
+                "Defina WXO_URL e WXO_API_KEY como variáveis de ambiente "
+                "ou no arquivo .env na raiz do projecto."
             )
         }
 
     return {
-        "WXO_URL": _obter("WXO_URL").rstrip("/"),
-        "WXO_API_KEY": _obter("WXO_API_KEY"),
+        "WXO_URL": url.rstrip("/"),
+        "WXO_API_KEY": key,
     }
 
 
