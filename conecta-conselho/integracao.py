@@ -244,20 +244,26 @@ def _consolidar_nuvem(
                 "erro": f"ID do agente '{chave}' não configurado (variável {env_var} ausente).",
             }, False, round(time.monotonic() - t_agente, 2)
         try:
-            resposta = cliente_nuvem.chamar_agente(
-                agent_id, f"Analise a região {regiao_id}"
-            )
-            # chamar_agente devolve {"erro": ...} em vez de levantar excepção
-            if "erro" in resposta:
-                return chave, {
-                    "score": 0,
-                    "confianca": "nao_avaliada",
-                    "justificativa": "",
-                    "riscos": [],
-                    "erro": resposta["erro"],
-                }, False, round(time.monotonic() - t_agente, 2)
-            conteudo = resposta["choices"][0]["message"]["content"]
-            parecer = cliente_nuvem.extrair_json(conteudo)
+            # O LLM do agente às vezes responde com texto fora do formato JSON.
+            # Nesse caso (e só nele) tenta de novo, até 3 tentativas no total.
+            _MSG_SEM_JSON = "Não foi possível extrair JSON da resposta."
+            for _tentativa in range(3):
+                resposta = cliente_nuvem.chamar_agente(
+                    agent_id, f"Analise a região {regiao_id}"
+                )
+                # chamar_agente devolve {"erro": ...} em vez de levantar excepção
+                if "erro" in resposta:
+                    return chave, {
+                        "score": 0,
+                        "confianca": "nao_avaliada",
+                        "justificativa": "",
+                        "riscos": [],
+                        "erro": resposta["erro"],
+                    }, False, round(time.monotonic() - t_agente, 2)
+                conteudo = resposta["choices"][0]["message"]["content"]
+                parecer = cliente_nuvem.extrair_json(conteudo)
+                if parecer.get("erro") != _MSG_SEM_JSON:
+                    break
             # extrair_json devolve {"erro": "..."} quando não consegue parsear.
             # Verificamos o valor (truthy) para não confundir com {"erro": None}
             # que é um campo legítimo nos pareceres dos agentes.
