@@ -54,7 +54,10 @@ flowchart TD
 inteli_girls/
 ├── agents/          # YAMLs dos agentes ADK
 ├── tools/           # Ferramentas Python dos agentes (tool_<nome>.py)
+├── api/             # Backend FastAPI usado pelo front-end
+├── frontend/        # Interface web (React + Vite + IBM Carbon)
 ├── conecta-conselho/
+│   ├── app.py       # interface Streamlit (legado)
 │   ├── data/        # regioes.json e regioes.csv (dados simulados)
 │   ├── models/      # Modelos Pydantic (regiao.py)
 │   ├── tools/       # consultar_regiao.py (consultas compartilhadas)
@@ -108,15 +111,37 @@ import json; print(json.dumps(mod.montar_parecer('aurora'), ensure_ascii=False, 
 
 > O `sys.path.insert(0, 'conecta-conselho')` é necessário porque o workspace tem dois pacotes `tools/` — um na raiz (ferramentas ADK) e outro em `conecta-conselho/tools/` (consultas compartilhadas). O Python do `.venv` já tem o ADK instalado.
 
-### Interface Streamlit
+### Interface web (React + FastAPI)
+
+A interface atual é um front-end **React** (pasta `frontend/`) que conversa com um backend **FastAPI** (pasta `api/`). São dois processos, então abra **dois terminais**.
+
+> **Pré-requisitos:** Python 3.12 (já instalado nos passos acima) e **Node.js 18 ou superior** (`node --version`).
+
+**Terminal 1 — backend** (na raiz do projeto, com o venv ativo):
 
 ```powershell
-python -m streamlit run conecta-conselho/app.py
+.venv\Scripts\Activate.ps1
+uvicorn api.main:app --reload --port 8000
 ```
 
-(com o ambiente virtual ativo; abrir fora do venv causa erro de módulo do ADK)
+A API fica em http://localhost:8000 (documentação interativa em http://localhost:8000/docs).
 
-Modo padrão: local (cálculos determinísticos, sem nuvem).
+**Terminal 2 — front-end:**
+
+```powershell
+cd frontend
+npm install                # só na primeira vez
+copy .env.example .env     # só na primeira vez
+npm run dev
+```
+
+Abra **http://localhost:5173**. O front só carrega as regiões se o backend (terminal 1) estiver rodando.
+
+Mais detalhes (estrutura, páginas, endpoints, build): [frontend/README.md](frontend/README.md).
+
+**Modo local × nuvem:** o padrão é o modo **local** (cálculos determinísticos, sem nuvem e **sem credenciais**). Na tela *Análise de Região*, a opção "IBM watsonx Orchestrate" usa os agentes publicados na nuvem e exige `WXO_URL`, `WXO_API_KEY` e os `CC_AGENT_ID_*` no arquivo `.env` da raiz (arquivo não versionado; peça os valores a quem publica os agentes).
+
+> **Streamlit (legado):** a interface anterior continua no repositório em `conecta-conselho/app.py` e pode ser aberta com `python -m streamlit run conecta-conselho/app.py`, mas **não é mais a interface oficial**.
 
 ---
 
@@ -146,6 +171,27 @@ Esse escalonamento garante que casos bloqueados ou com dados incertos sejam deci
 > ⚠️ Os pesos e limiares acima são **hipóteses do MVP** para fins de demonstração. Não representam metodologia real de decisão de investimento.
 
 Resultados por região: [RESULTADOS_REGIOES.md](conecta-conselho/docs/RESULTADOS_REGIOES.md)
+
+---
+
+## Capturas de tela
+
+**Como funciona** — página inicial com a equipe e o fluxo interativo dos agentes:
+![Como funciona](conecta-conselho/docs/prints/front_como_funciona.png)
+
+**Análise de Região › Indicadores** — mapa das regiões e indicadores por perspectiva:
+![Análise — indicadores](conecta-conselho/docs/prints/front_analise_indicadores.png)
+
+**Análise de Região › Conselho (Central)** — recomendação *Realizar piloto*, com os pareceres dos 5 agentes:
+![Análise — Central](conecta-conselho/docs/prints/front_analise_conselho_central.png)
+
+**Análise de Região › Conselho (Nova União)** — recomendação *Aguardar* com alerta de **Atenção Prioritária**:
+![Análise — Nova União](conecta-conselho/docs/prints/front_analise_conselho_nova_uniao.png)
+
+**Simulador de cenários** — atalho "Esperança + parcerias", comparando cenário base e com parcerias:
+![Simulador — Esperança](conecta-conselho/docs/prints/front_simulador_esperanca.png)
+
+> ℹ️ Prints do front-end React em modo local (dados simulados), resolução 1440 px.
 
 ---
 

@@ -1,12 +1,12 @@
 import { StructuredListWrapper, StructuredListHead, StructuredListRow, StructuredListCell, StructuredListBody } from '@carbon/react'
 
-function formatValue(v: unknown): string {
+function formatValue(v: unknown, key = ''): string {
   if (v === null || v === undefined) return '—'
   if (typeof v === 'boolean') return v ? 'Sim' : 'Não'
   if (Array.isArray(v)) return v.length > 0 ? v.join(', ') : '—'
   if (typeof v === 'number') {
-    // Detect monetary values (large numbers likely BRL)
-    if (v > 10000) {
+    // Só campos em reais (chave termina em _reais) recebem o prefixo R$
+    if (/_reais$/i.test(key)) {
       return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
     }
     return v.toLocaleString('pt-BR')
@@ -51,7 +51,7 @@ export function IndicatorTable({ data }: IndicatorTableProps) {
                   ))}
                 </ul>
               ) : (
-                formatValue(value)
+                formatValue(value, key)
               )}
             </StructuredListCell>
           </StructuredListRow>

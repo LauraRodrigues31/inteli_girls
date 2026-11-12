@@ -28,9 +28,8 @@ Interface web do sistema multiagente **Conecta Conselho**, construída com:
 # Ative o venv existente do projeto
 .venv\Scripts\Activate.ps1
 
-# Instale as dependências da API (já estão no requirements.txt raiz,
-# mas se precisar instalar separado:)
-pip install fastapi "uvicorn[standard]"
+# Instale as dependências (FastAPI e uvicorn já estão no requirements.txt raiz)
+pip install -r requirements.txt
 
 # Suba o servidor (a partir da raiz do projeto)
 uvicorn api.main:app --reload --port 8000
@@ -131,3 +130,9 @@ npm run build
 | `POST` | `/analise/{id}` | Executa o Conselho (`{"fonte": "local"\|"nuvem"}`) |
 | `GET` | `/relatorio/{id}` | Baixa o último relatório JSON da região |
 | `GET` | `/docs` | Swagger UI interativo |
+
+---
+
+## Modo nuvem (IBM watsonx Orchestrate)
+
+Por padrão a análise roda em modo **local** (determinístico, sem credenciais). Para usar a opção "IBM watsonx Orchestrate" na tela *Análise de Região*, o backend precisa de um `.env` na **raiz do projeto** (não versionado) com `WXO_URL`, `WXO_API_KEY` e os `CC_AGENT_ID_*` dos 5 agentes. Veja [conecta-conselho/docs/GUIA_PUBLICACAO_AGENTES.md](../conecta-conselho/docs/GUIA_PUBLICACAO_AGENTES.md).

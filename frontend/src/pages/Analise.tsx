@@ -315,7 +315,9 @@ export default function Analise() {
 
           <TabPanels>
             {/* ── Tab 1: Indicators ── */}
-            <TabPanel style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <TabPanel style={{ padding: '20px' }}>
+              {/* flex vive num wrapper: `display` inline no TabPanel anula o atributo hidden do Carbon */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
               {/* Map */}
               <RegionMap
@@ -384,6 +386,7 @@ export default function Analise() {
                     </div>
                   )}
                 </div>
+              </div>
               </div>
             </TabPanel>
 

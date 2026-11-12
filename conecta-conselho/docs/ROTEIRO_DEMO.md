@@ -1,6 +1,6 @@
 # Roteiro da Demonstração — Conecta Conselho
 
-**Duração total:** 7–8 minutos | **Formato:** live no Streamlit + nuvem IBM watsonx Orchestrate
+**Duração total:** 7–8 minutos | **Formato:** live no site (front React) + nuvem IBM watsonx Orchestrate
 **Dados:** 100 % simulados — avisar à banca no início
 
 ---
@@ -87,7 +87,7 @@ Três regiões foram escolhidas para contar histórias contrastantes com os núm
 ### Na véspera
 - [ ] `develop` atualizada: `git pull origin develop`
 - [ ] `python -m pytest -q` passando sem falhas
-- [ ] `streamlit run conecta-conselho/app.py` abre sem erro
+- [ ] Backend (`uvicorn api.main:app --port 8000`) e front (`cd frontend; npm run dev`) sobem sem erro e http://localhost:5173 abre
 - [ ] Prints de backup das 3 regiões (central, esperanca, nova_uniao) tirados e salvos
 - [ ] Ensaio cronometrado: deve caber em 7–8 min
 
@@ -95,7 +95,7 @@ Três regiões foram escolhidas para contar histórias contrastantes com os núm
 - [ ] **Laura** roda `orchestrate env activate conecta-conselho` (o token expira em 2 h — ativar no máximo 1 h antes)
 - [ ] Testar as 3 regiões na nuvem: central → realizar_piloto, esperanca → aguardar, nova_uniao → escalar
 - [ ] Confirmar conexão à internet estável
-- [ ] Abas abertas: Streamlit, repo GitHub, este roteiro
+- [ ] Abas abertas: site (localhost:5173), repo GitHub, este roteiro
 
 > **Lembrete:** a instância Trial (jp-tok) expira por volta de **01/12/2026** (30 dias a partir da criação).
 > Confirmar a data exata em: IBM Cloud → Resource list → instância watsonx Orchestrate → aba Plan.
@@ -106,8 +106,8 @@ Três regiões foram escolhidas para contar histórias contrastantes com os núm
 
 | Falha | Ação |
 |---|---|
-| Nuvem IBM Cloud fora do ar ou lenta | Rodar Streamlit em modo local: `$env:CC_MODO="local"; streamlit run conecta-conselho/app.py` (usa os mesmos cálculos determinísticos, sem chamadas à nuvem) |
-| Streamlit com erro de import | Usar os **prints de backup** das 3 regiões e as tabelas de `RESULTADOS_REGIOES.md` para narrar os resultados manualmente |
+| Nuvem IBM Cloud fora do ar ou lenta | Na tela *Análise de Região*, escolher a fonte **Local (determinístico)** (usa os mesmos cálculos, sem chamadas à nuvem) |
+| Site ou backend com erro ao subir | Usar os **prints de backup** das 3 regiões e as tabelas de `RESULTADOS_REGIOES.md` para narrar os resultados manualmente |
 | Token expirado durante a demo | Laura reativa: `orchestrate env activate conecta-conselho` (30 s) |
 | Score diferente do gabarito | Citar: *"Os scores são determinísticos — qualquer diferença é de versão do código. O gabarito está em RESULTADOS_REGIOES.md, gerado com o commit 1010f96"* |
 
@@ -124,7 +124,7 @@ Três regiões foram escolhidas para contar histórias contrastantes com os núm
 > A confiança não é opinião do LLM: cada agente a calcula por regra no código. Na maioria dos agentes ela depende da completude dos dados — campos faltando reduzem a confiança. O Agente de Orçamento também reduz a confiança para `baixa` quando a operação é financeiramente inviável (receita menor que o custo operacional), como na Nova União. Não é uma probabilidade estatística. Confiança baixa em qualquer agente leva o Guardião a escalar para um humano.
 
 **P: Os dados são reais?**
-> Não. Todos os dados são 100 % simulados e fictícios, criados exclusivamente para fins de demonstração. O aviso aparece em todas as telas do Streamlit e no topo de cada relatório JSON. Não há nenhum dado real de municípios brasileiros.
+> Não. Todos os dados são 100 % simulados e fictícios, criados exclusivamente para fins de demonstração. O aviso aparece em todas as telas do site e no topo de cada relatório JSON. Não há nenhum dado real de municípios brasileiros.
 
 **P: E se os agentes discordarem?**
 > O Guardião identifica e registra divergências explicitamente (campo `divergencias`). Quando a tensão é alta — por exemplo, impacto social muito alto mas orçamento zero — o Guardião a destaca na justificativa e, se a confiança for baixa ou o consolidado muito baixo, escala para análise humana. O desacordo é recurso, não bug.

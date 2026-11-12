@@ -1,7 +1,9 @@
 import axios from 'axios'
 import type { Region, RegionSummary, GuardianResult, SimulatorParams } from '../types'
 
-const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+// Dev: backend em localhost:8000. Produção (build): mesma origem do site, pois a API serve o front.
+const BASE_URL =
+  import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:8000')
 
 const http = axios.create({
   baseURL: BASE_URL,
