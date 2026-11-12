@@ -246,8 +246,10 @@ def test_carregar_credenciais_ausentes(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
     env_file.write_text("WXO_URL=https://fake.example.com\n", encoding="utf-8")
 
-    # Aponta _ENV_FILE para o ficheiro temporário
+    # Aponta _ENV_FILE para o ficheiro temporário e isola do ambiente real
     monkeypatch.setattr(cn, "_ENV_FILE", env_file)
+    monkeypatch.delenv("WXO_URL", raising=False)
+    monkeypatch.delenv("WXO_API_KEY", raising=False)
 
     resultado = cn.carregar_credenciais()
 
@@ -258,10 +260,23 @@ def test_carregar_credenciais_ausentes(tmp_path, monkeypatch):
 def test_carregar_credenciais_sem_env(tmp_path, monkeypatch):
     """Se o .env não existir, devolve {"erro": ...}."""
     monkeypatch.setattr(cn, "_ENV_FILE", tmp_path / "inexistente.env")
+    monkeypatch.delenv("WXO_URL", raising=False)
+    monkeypatch.delenv("WXO_API_KEY", raising=False)
 
     resultado = cn.carregar_credenciais()
 
     assert "erro" in resultado
+
+
+def test_carregar_credenciais_de_variaveis_de_ambiente(tmp_path, monkeypatch):
+    """Sem .env (ex.: hospedagem), usa as variáveis de ambiente do processo."""
+    monkeypatch.setattr(cn, "_ENV_FILE", tmp_path / "inexistente.env")
+    monkeypatch.setenv("WXO_URL", "https://fake.example.com/")
+    monkeypatch.setenv("WXO_API_KEY", "chave-fake")
+
+    resultado = cn.carregar_credenciais()
+
+    assert resultado == {"WXO_URL": "https://fake.example.com", "WXO_API_KEY": "chave-fake"}
 
 
 # ---------------------------------------------------------------------------

@@ -4,7 +4,7 @@ Camada de conexão com o IBM watsonx Orchestrate (modo nuvem).
 Funções públicas
 ----------------
 carregar_credenciais() -> dict
-    Lê WXO_URL e WXO_API_KEY do arquivo .env na raiz do projecto.
+    Lê WXO_URL e WXO_API_KEY de variáveis de ambiente ou do .env na raiz.
     Devolve {"WXO_URL": ..., "WXO_API_KEY": ...} ou {"erro": "..."}.
 
 obter_token(api_key: str) -> str | dict
@@ -30,6 +30,7 @@ Regras gerais
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -64,32 +65,43 @@ _IAM_URL = "https://iam.cloud.ibm.com/identity/token"
 
 def carregar_credenciais() -> dict:
     """
-    Lê WXO_URL e WXO_API_KEY do arquivo .env na raiz do projecto usando
-    python-dotenv.  Não lança excepção: erros são devolvidos como
-    {"erro": "..."}.
+    Lê WXO_URL e WXO_API_KEY.  Ordem de prioridade (por variável):
+
+      1. variáveis de ambiente do processo (usadas em hospedagem, ex.: Render);
+      2. arquivo .env na raiz do projecto (uso local), via python-dotenv.
+
+    Não lança excepção: erros são devolvidos como {"erro": "..."}.
 
     Returns:
         {"WXO_URL": str, "WXO_API_KEY": str}  em caso de sucesso, ou
-        {"erro": str}  se alguma variável estiver ausente ou o ficheiro não
-        existir.
+        {"erro": str}  se alguma variável estiver ausente.
     """
-    if not _ENV_FILE.exists():
-        return {"erro": f"Ficheiro .env não encontrado em {_ENV_FILE}"}
+    valores: dict = dotenv_values(str(_ENV_FILE)) if _ENV_FILE.exists() else {}
 
-    valores = dotenv_values(str(_ENV_FILE))
+    def _obter(chave: str) -> str:
+        return (os.environ.get(chave) or valores.get(chave) or "").strip()
 
-    ausentes = [k for k in ("WXO_URL", "WXO_API_KEY") if not valores.get(k)]
+    if not _ENV_FILE.exists() and not (os.environ.get("WXO_URL") or os.environ.get("WXO_API_KEY")):
+        return {
+            "erro": (
+                f"Credenciais não encontradas: não há variáveis de ambiente WXO_URL/WXO_API_KEY "
+                f"nem ficheiro .env em {_ENV_FILE}"
+            )
+        }
+
+    ausentes = [k for k in ("WXO_URL", "WXO_API_KEY") if not _obter(k)]
     if ausentes:
         return {
             "erro": (
-                f"Variável(is) ausente(s) no .env: {', '.join(ausentes)}. "
-                "Adicione WXO_URL e WXO_API_KEY ao ficheiro .env na raiz do projecto."
+                f"Variável(is) ausente(s): {', '.join(ausentes)}. "
+                "Defina WXO_URL e WXO_API_KEY no ficheiro .env na raiz do projecto "
+                "ou como variáveis de ambiente."
             )
         }
 
     return {
-        "WXO_URL": valores["WXO_URL"].rstrip("/"),
-        "WXO_API_KEY": valores["WXO_API_KEY"],
+        "WXO_URL": _obter("WXO_URL").rstrip("/"),
+        "WXO_API_KEY": _obter("WXO_API_KEY"),
     }
 
 
