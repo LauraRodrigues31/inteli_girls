@@ -60,3 +60,10 @@ export async function simularCenario(params: SimulatorParams): Promise<{
 
   return { base, parcerias }
 }
+
+// ─── Cloud mode status ───────────────────────────────────────────────────────
+
+export async function statusNuvem(): Promise<boolean> {
+  const { data } = await http.get<{ configurada: boolean }>('/nuvem/status')
+  return data.configurada
+}

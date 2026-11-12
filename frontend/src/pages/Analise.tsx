@@ -25,7 +25,7 @@ import {
 import { PlayFilled, ChevronRight } from '@carbon/icons-react'
 import { useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
-import { listarRegioes, consultarRegiao, executarAnalise } from '../api/client'
+import { listarRegioes, consultarRegiao, executarAnalise, statusNuvem } from '../api/client'
 import type { Region, GuardianResult, Recomendacao } from '../types'
 import { IndicatorTabs } from '../components/indicators/IndicatorTabs'
 import { GuardianResultPanel } from '../components/analysis/GuardianResult'
@@ -46,6 +46,8 @@ export default function Analise() {
   const [regionData, setRegionData] = useState<Region | null>(null)
   const [resultado, setResultado] = useState<GuardianResult | null>(null)
   const [activeTab, setActiveTab] = useState(0)
+  // null = ainda não verificado; o aviso só aparece quando sabemos que faltam credenciais
+  const [nuvemConfigurada, setNuvemConfigurada] = useState<boolean | null>(null)
 
   // Load region list on mount
   useEffect(() => {
@@ -62,6 +64,13 @@ export default function Analise() {
       )
       .finally(() => setLoadingRegioes(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Verifica no backend se o modo nuvem está configurado
+  useEffect(() => {
+    statusNuvem()
+      .then(setNuvemConfigurada)
+      .catch(() => setNuvemConfigurada(null))
   }, [])
 
   // Handle ?demo= query param
@@ -210,11 +219,11 @@ export default function Analise() {
             <RadioButton labelText="IBM watsonx Orchestrate" value="nuvem" id="fonte-nuvem" />
           </RadioButtonGroup>
 
-          {state.fonte === 'nuvem' && (
+          {state.fonte === 'nuvem' && nuvemConfigurada === false && (
             <InlineNotification
               kind="warning"
               title="Requer credenciais"
-              subtitle="Configure CC_AGENT_ID_* no .env"
+              subtitle="Configure WXO_URL, WXO_API_KEY e CC_AGENT_ID_* (variáveis de ambiente ou .env)"
               lowContrast
               hideCloseButton
               style={{ marginTop: '8px' }}

@@ -133,3 +133,17 @@ def get_relatorio(regiao_id: str) -> JSONResponse:
             "Content-Type": "application/json; charset=utf-8",
         },
     )
+
+
+@router.get("/nuvem/status")
+def status_nuvem() -> dict[str, bool]:
+    """Indica se as credenciais do modo nuvem (watsonx Orchestrate) estão configuradas.
+
+    Devolve apenas um booleano: nenhuma chave, URL ou ID é exposto.
+    """
+    from cliente_nuvem import carregar_credenciais  # type: ignore[import]
+    from integracao import _verificar_credenciais_nuvem  # type: ignore[import]
+
+    creds_ok = "erro" not in carregar_credenciais()
+    ids_ok, _ = _verificar_credenciais_nuvem()
+    return {"configurada": bool(creds_ok and ids_ok)}
